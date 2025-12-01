@@ -83,6 +83,11 @@ export class HomeScene extends Phaser.Scene {
 
         this.btnGuide = new UiButton(this, w * 0.7, h * 0.48, "HƯỚNG DẪN", w * 0.42);
         this.add.existing(this.btnGuide);
+        this.btnGuide.onClick(() => {
+            // Launch guide as overlay
+            this.scene.launch(Scence.Guide);
+            this.scene.bringToTop(Scence.Guide);
+        });
 
         // Bike image
         this.bike = this.add.image(w / 2, h * 0.78, "bike").setOrigin(0.5);

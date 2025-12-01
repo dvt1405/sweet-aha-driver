@@ -5,4 +5,5 @@ export enum Scence {
     BackgroundScroll = "BackgroundScrollScene",
     Bike = "BikeScene",
     Home = "HomeScene",
+    Guide = "GuideScene",
 }

@@ -1,16 +1,17 @@
 "use client";
 
-import React, {useEffect, useRef} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import Phaser from "phaser";
 import {WelcomeScene} from "@/scence/WelcomeScene";
 import BackgroundGarageScene from "@/scence/BackgroundGarageScene";
 import BackgroundScrollScene from "@/scence/BackgroundScrollScene";
 import BikeScene from "@/scence/BikeScene";
-import BootScene from "@/scence/BootScene";
+import {HomeScene} from "@/scence/HomeScene";
 
 export default function BikeGame() {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const gameRef = useRef<Phaser.Game | null>(null);
+    const outerContainerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -29,7 +30,7 @@ export default function BikeGame() {
             width: 1080,
             height: 1920,
             backgroundColor: "#000000",
-            scene: [WelcomeScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene],
+            scene: [WelcomeScene, HomeScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene],
             physics: {default: "arcade"},
             scale: {
                 mode: Phaser.Scale.FIT,
@@ -47,10 +48,13 @@ export default function BikeGame() {
     }, []);
 
     return (
-        <div className="w-full flex items-center justify-center">
+        <div
+            ref={outerContainerRef}
+            className="w-full sm:max-w-3xl aspect-[9/16] sm:aspect-[16/9]"
+        >
             <div
                 ref={containerRef}
-                className="w-full sm:max-w-3xl aspect-[9/16] sm:aspect-[16/9]"
+                className="w-full h-full"
             />
         </div>
     );

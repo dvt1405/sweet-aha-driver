@@ -22,6 +22,8 @@ export default class UiButton extends Phaser.GameObjects.Container {
     private _activeKey = "bg_button_active";
     private _disabledKey = "bg_button_disable";
     private _progressKey = "bg_progress_active"
+    private _onClick: () => void = () => {
+    };
 
     constructor(
         scene: Phaser.Scene,
@@ -42,7 +44,12 @@ export default class UiButton extends Phaser.GameObjects.Container {
             (this._enabled ? this._progressKey : this._disabledKey)
             : (this._enabled ? this._activeKey : this._disabledKey);
 
-        this.bg = scene.add.image(0, 0, bgKey).setOrigin(0.5);
+        this.bg = scene.add.image(0, 0, bgKey)
+            .setInteractive({useHandCursor: true})
+            .on("pointerdown", () => {
+                if (this._enabled) this._onClick();
+            })
+            .setOrigin(0.5);
 
         // Create the text label with the requested styling (enabled by default)
         const fontFamily = getAppFontFamily();
@@ -139,34 +146,7 @@ export default class UiButton extends Phaser.GameObjects.Container {
     }
 
     public onClick(cb: () => void) {
-        // Remove previous click listeners to avoid multiple bindings
-
-        this.on("click", () => {
-            console.log('onclick')
-            if (this._enabled) cb();
-        })
-
-        this.off("pointerdown");
-        this.off("pointerup");
-        this.off("pointerupoutside");
-        // Trigger action on pointerdown for more reliable mobile clicks
-        this.on("pointerdown", () => {
-            console.log('clicked')
-            if (this._enabled) cb();
-        });
-
-        // Fallbacks in case some platforms only emit pointerup
-        this.on("pointerup", () => {
-            // no-op on purpose to avoid double fire; keep for compatibility
-        });
-        this.on("pointerupoutside", () => {
-            // no-op
-        });
-        this.on("touchend", () => {
-            if (this._enabled) cb();
-        })
-        
-        // Ensure hand cursor is shown
+        this._onClick = cb;
         if (this.input) {
             this.input.cursor = 'pointer';
         }
@@ -195,7 +175,7 @@ export default class UiButton extends Phaser.GameObjects.Container {
             // For Containers positioned by center with children at (0,0),
             // the local hit area must be centered as well
             this.setInteractive(
-                new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+                new Phaser.Geom.Rectangle(0, 0, w, h),
                 Phaser.Geom.Rectangle.Contains
             );
         }
@@ -209,7 +189,7 @@ export default class UiButton extends Phaser.GameObjects.Container {
             const w = this.width, h = this.height;
             // Center the hit area on the container's position
             this.setInteractive(
-                new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
+                new Phaser.Geom.Rectangle(0, 0, w, h),
                 Phaser.Geom.Rectangle.Contains
             );
         }

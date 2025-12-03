@@ -244,8 +244,10 @@ export class HomeScene extends Phaser.Scene {
         return new Promise((resolve) => {
             // If already loaded with same key, just swap
             if (this.textures.exists(key)) {
-                target.setTexture(key);
-                this.fitWidth(target, this.scale.width * 0.85);
+                try {
+                    target.setTexture(key);
+                    this.fitWidth(target, this.scale.width * 0.85);
+                } catch {}
                 resolve();
                 return;
             }
@@ -254,8 +256,21 @@ export class HomeScene extends Phaser.Scene {
             this.load.image(uniqueKey, url);
             this.load.once(Phaser.Loader.Events.COMPLETE, () => {
                 try {
-                    target.setTexture(uniqueKey);
+                    if (this.textures.exists(uniqueKey)) {
+                        target.setTexture(uniqueKey);
+                    } else if (this.textures.exists('bike')) {
+                        // Fallback to default bike image if external load failed
+                        target.setTexture('bike');
+                    }
                     this.fitWidth(target, this.scale.width * 0.85);
+                } catch {
+                    // Final safeguard: try to use default bike texture
+                    try {
+                        if (this.textures.exists('bike')) {
+                            target.setTexture('bike');
+                            this.fitWidth(target, this.scale.width * 0.85);
+                        }
+                    } catch {}
                 } finally {
                     resolve();
                 }

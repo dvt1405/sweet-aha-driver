@@ -3,7 +3,16 @@ import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
-import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, claimDailyCheckin, type DriverBuddyProfile } from "@/services/globalApi";
+import {
+    initFromUrlOrStorage,
+    fetchProfile,
+    getProfile,
+    subscribe,
+    claimDailyCheckin,
+    type DriverBuddyProfile
+} from "@/services/globalApi";
+import {is} from "@babel/types";
+import {ApiError} from "next/dist/server/api-utils";
 
 export class HomeScene extends Phaser.Scene {
     private claiming = false;
@@ -42,6 +51,8 @@ export class HomeScene extends Phaser.Scene {
         this.load.image("bike", "/ic_bike.png");
         // Popup overlay image for claim success
         this.load.image("overlay_popup", "/overlay_popup.png");
+        // Popup warning background for already-claimed case (HTTP 404)
+        this.load.image("bg_popup_warning", "/bg_popup_warning.png");
     }
 
     create() {
@@ -205,13 +216,15 @@ export class HomeScene extends Phaser.Scene {
         // Subscribe to global profile changes
         this.unsubscribeProfile = subscribe((p) => {
             if (p) {
-                this.applyProfile(p).catch(() => {});
+                this.applyProfile(p).catch(() => {
+                });
             }
         });
         // Apply cached profile immediately if available
         const cached = getProfile();
         if (cached) {
-            this.applyProfile(cached).catch(() => {});
+            this.applyProfile(cached).catch(() => {
+            });
         }
         // Ensure we cleanup subscription when scene ends
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -223,13 +236,15 @@ export class HomeScene extends Phaser.Scene {
             this.unsubscribeProfile = undefined;
         });
         if (token) {
-            fetchProfile().then(p => this.applyProfile(p)).catch(() => {});
+            fetchProfile().then(p => this.applyProfile(p)).catch(() => {
+            });
         } else {
             // keep defaults if no token
         }
     }
 
-    update() {}
+    update() {
+    }
 
     private async applyProfile(data: DriverBuddyProfile) {
         if (!data) return;
@@ -253,7 +268,8 @@ export class HomeScene extends Phaser.Scene {
             if (imgUrl && typeof imgUrl === 'string') {
                 await this.loadExternalImageAndApply('buddy_bike', imgUrl, this.bike);
             }
-        } catch {}
+        } catch {
+        }
     }
 
     private async handleDailyCheckin() {
@@ -268,9 +284,16 @@ export class HomeScene extends Phaser.Scene {
             // Show success popup with dynamic amount
             this.showClaimPopup(res?.bonus_amount ?? 0);
             // Refresh profile to update balance
-            await fetchProfile(true).catch(() => {});
-        } catch (e) {
+            await fetchProfile(true).catch(() => {
+            });
+        } catch (e: any) {
             // If already claimed or any error, disable for safety this day
+            try {
+                if (e instanceof ApiError && (e.statusCode === 400 || e.statusCode === 404)) {
+                    this.showWarningPopup('Mỗi ngày chỉ có thể điểm danh 1 lần');
+                }
+            } catch {
+            }
             this.markCheckedInToday();
             this.updateCheckinButtonState();
         } finally {
@@ -282,11 +305,12 @@ export class HomeScene extends Phaser.Scene {
         try {
             const today = new Date();
             const key = HomeScene.CHECKIN_KEY;
-            const value = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+            const value = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
             if (typeof window !== 'undefined') {
                 window.localStorage.setItem(key, value);
             }
-        } catch {}
+        } catch {
+        }
     }
 
     private hasCheckedInToday(): boolean {
@@ -295,7 +319,7 @@ export class HomeScene extends Phaser.Scene {
             const value = window.localStorage.getItem(HomeScene.CHECKIN_KEY);
             if (!value) return false;
             const today = new Date();
-            const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+            const todayStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
             return value === todayStr;
         } catch {
             return false;
@@ -306,22 +330,23 @@ export class HomeScene extends Phaser.Scene {
         try {
             const disabled = this.hasCheckedInToday();
             this.btnCheckIn?.setEnabled(!disabled);
-        } catch {}
+        } catch {
+        }
     }
 
     private showClaimPopup(amount: number) {
-        const { width: w, height: h } = this.scale;
+        const {width: w, height: h} = this.scale;
         // Dark backdrop
-        const backdrop = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.55)
-            .setInteractive({ useHandCursor: false });
+        const backdrop = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
+            .setInteractive({useHandCursor: false});
 
         // Popup image centered
-        const popup = this.add.image(w/2, h/2, 'overlay_popup').setOrigin(0.5);
+        const popup = this.add.image(w / 2, h / 2, 'overlay_popup').setOrigin(0.5);
         const targetW = Math.min(w * 0.8, 340);
         this.fitWidth(popup as any, targetW);
 
         // Amount text displayed roughly at the yellow bar center in image
-        const amountText = this.add.text(w/2, 0, `${amount} XU`, {
+        const amountText = this.add.text(w / 2, 0, `${amount} XU`, {
             fontFamily: getAppFontFamily(),
             fontStyle: '800',
             fontSize: 44,
@@ -333,10 +358,10 @@ export class HomeScene extends Phaser.Scene {
 
         // Position amount text at approximate bar Y (tuned for provided image)
         const popupBarOffsetY = popup.displayHeight * 0.04; // small tweak
-        amountText.setPosition(w/2, popup.y + popupBarOffsetY);
+        amountText.setPosition(w / 2, popup.y + popupBarOffsetY);
 
         // Close button at bottom
-        const closeBtn = new UiButton(this, w/2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
+        const closeBtn = new UiButton(this, w / 2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
         this.add.existing(closeBtn);
         closeBtn.onClick(() => close());
 
@@ -357,6 +382,46 @@ export class HomeScene extends Phaser.Scene {
         };
     }
 
+    private showWarningPopup(message: string) {
+        const {width: w, height: h} = this.scale;
+        const backdrop = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
+            .setInteractive({useHandCursor: false});
+
+        const popup = this.add.image(w / 2, h / 2, 'bg_popup_warning').setOrigin(0.5);
+        const targetW = Math.min(w * 0.86, 420);
+        this.fitWidth(popup as any, targetW);
+
+        // Centered message text in the yellow area
+        const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+            fontFamily: getAppFontFamily(),
+            fontStyle: '700',
+            fontSize: 28,
+            color: '#6B4B00',
+            align: 'center',
+            wordWrap: {width: targetW * 0.76},
+        };
+        const msg = this.add.text(w / 2, popup.y + popup.displayHeight * 0.12, message, textStyle)
+            .setOrigin(0.5);
+
+        const closeBtn = new UiButton(this, w / 2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
+        this.add.existing(closeBtn);
+        closeBtn.onClick(() => close());
+
+        backdrop.on('pointerdown', () => close());
+
+        this.children.bringToTop(backdrop);
+        this.children.bringToTop(popup);
+        this.children.bringToTop(msg);
+        this.children.bringToTop(closeBtn);
+
+        const close = () => {
+            backdrop.destroy();
+            popup.destroy();
+            msg.destroy();
+            closeBtn.destroy();
+        };
+    }
+
     private loadExternalImageAndApply(key: string, url: string, target: Phaser.GameObjects.Image): Promise<void> {
         return new Promise((resolve) => {
             // If already loaded with same key, just swap
@@ -364,7 +429,8 @@ export class HomeScene extends Phaser.Scene {
                 try {
                     target.setTexture(key);
                     this.fitWidth(target, this.scale.width * 0.85);
-                } catch {}
+                } catch {
+                }
                 resolve();
                 return;
             }
@@ -387,7 +453,8 @@ export class HomeScene extends Phaser.Scene {
                             target.setTexture('bike');
                             this.fitWidth(target, this.scale.width * 0.85);
                         }
-                    } catch {}
+                    } catch {
+                    }
                 } finally {
                     resolve();
                 }

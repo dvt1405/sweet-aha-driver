@@ -3,22 +3,24 @@
  Scenes can import this module to access token and cached profile across the app.
 */
 
+import {ApiError} from "next/dist/server/api-utils";
+
 export type DriverBuddyProfile = {
-  _id: string;
-  balance: number;
-  buddy?: {
-    level?: number;
-    model_name?: string;
-    upgrade_cost?: number;
-    img_url?: string;
-  };
-  next_level_buddy?: {
-    level?: number;
-    model_name?: string;
-    upgrade_cost?: number;
-    img_url?: string;
-  };
-  can_upgrade?: boolean;
+    _id: string;
+    balance: number;
+    buddy?: {
+        level?: number;
+        model_name?: string;
+        upgrade_cost?: number;
+        img_url?: string;
+    };
+    next_level_buddy?: {
+        level?: number;
+        model_name?: string;
+        upgrade_cost?: number;
+        img_url?: string;
+    };
+    can_upgrade?: boolean;
 } | null;
 
 const API_URL = 'https://apistg.ahamove.com/api/v3/private/driver-buddy';
@@ -33,213 +35,227 @@ const listeners = new Set<(p: DriverBuddyProfile) => void>();
 const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
 
 function cleanTokenFromUrl() {
-  try {
-    if (!isBrowser()) return;
-    const url = new URL(window.location.href);
-    let changed = false;
-    if (url.searchParams.has('token')) {
-      url.searchParams.delete('token');
-      changed = true;
+    try {
+        if (!isBrowser()) return;
+        const url = new URL(window.location.href);
+        let changed = false;
+        if (url.searchParams.has('token')) {
+            url.searchParams.delete('token');
+            changed = true;
+        }
+        if (url.searchParams.has('debug')) {
+            url.searchParams.delete('debug');
+            changed = true;
+        }
+        if (changed) {
+            window.history.replaceState({}, document.title, url.toString());
+        }
+    } catch {
     }
-    if (url.searchParams.has('debug')) {
-      url.searchParams.delete('debug');
-      changed = true;
-    }
-    if (changed) {
-      window.history.replaceState({}, document.title, url.toString());
-    }
-  } catch {}
 }
 
 function notify() {
-  for (const cb of Array.from(listeners)) {
-    try { cb(_profile); } catch {}
-  }
+    for (const cb of Array.from(listeners)) {
+        try {
+            cb(_profile);
+        } catch {
+        }
+    }
 }
 
 export function setToken(token: string | null) {
-  _token = token && token.trim().length > 0 ? token : null;
-  if (isBrowser()) {
-    try {
-      if (_token) localStorage.setItem(TOKEN_KEY, _token);
-      else localStorage.removeItem(TOKEN_KEY);
-    } catch {}
-  }
+    _token = token && token.trim().length > 0 ? token : null;
+    if (isBrowser()) {
+        try {
+            if (_token) localStorage.setItem(TOKEN_KEY, _token);
+            else localStorage.removeItem(TOKEN_KEY);
+        } catch {
+        }
+    }
 }
 
 export function getToken(): string | null {
-  if (_token) return _token;
-  if (!isBrowser()) return null;
-  try {
-    const saved = localStorage.getItem(TOKEN_KEY);
-    _token = saved && saved.length > 0 ? saved : null;
-    return _token;
-  } catch {
-    return null;
-  }
+    if (_token) return _token;
+    if (!isBrowser()) return null;
+    try {
+        const saved = localStorage.getItem(TOKEN_KEY);
+        _token = saved && saved.length > 0 ? saved : null;
+        return _token;
+    } catch {
+        return null;
+    }
 }
 
 export function setDebug(on: boolean) {
-  _debug = !!on;
-  if (isBrowser()) {
-    try {
-      localStorage.setItem(DEBUG_KEY, _debug ? '1' : '0');
-    } catch {}
-  }
+    _debug = !!on;
+    if (isBrowser()) {
+        try {
+            localStorage.setItem(DEBUG_KEY, _debug ? '1' : '0');
+        } catch {
+        }
+    }
 }
 
 export function getDebug(): boolean {
-  if (_debug !== undefined) return _debug;
-  if (!isBrowser()) return false;
-  try {
-    const v = localStorage.getItem(DEBUG_KEY);
-    _debug = v === '1' || v === 'true';
-    return _debug;
-  } catch {
-    return false;
-  }
+    if (_debug !== undefined) return _debug;
+    if (!isBrowser()) return false;
+    try {
+        const v = localStorage.getItem(DEBUG_KEY);
+        _debug = v === '1' || v === 'true';
+        return _debug;
+    } catch {
+        return false;
+    }
 }
 
 export function isDebug(): boolean {
-  return !!_debug;
+    return !!_debug;
 }
 
 export function initFromUrlOrStorage(): string | null {
-  if (!isBrowser()) return null;
-  try {
-    const url = new URL(window.location.href);
-    const token = url.searchParams.get('token');
-    const debugParam = url.searchParams.get('debug');
-    if (debugParam !== null) {
-      const on = debugParam === '' || debugParam === '1' || debugParam.toLowerCase() === 'true';
-      setDebug(on);
-    } else {
-      // load from storage when not present in URL
-      const saved = getDebug();
-      setDebug(saved);
-    }
-    if (token && token.trim().length > 0) {
-      setToken(token);
-    }
-    // Clean URL of token/debug params always after processing
-    cleanTokenFromUrl();
+    if (!isBrowser()) return null;
+    try {
+        const url = new URL(window.location.href);
+        const token = url.searchParams.get('token');
+        const debugParam = url.searchParams.get('debug');
+        if (debugParam !== null) {
+            const on = debugParam === '' || debugParam === '1' || debugParam.toLowerCase() === 'true';
+            setDebug(on);
+        } else {
+            // load from storage when not present in URL
+            const saved = getDebug();
+            setDebug(saved);
+        }
+        if (token && token.trim().length > 0) {
+            setToken(token);
+        }
+        // Clean URL of token/debug params always after processing
+        cleanTokenFromUrl();
 
-    // Return current token or from storage
-    if (_token) return _token;
-    return getToken();
-  } catch {
-    return getToken();
-  }
+        // Return current token or from storage
+        if (_token) return _token;
+        return getToken();
+    } catch {
+        return getToken();
+    }
 }
 
 export function getProfile(): DriverBuddyProfile {
-  return _profile;
+    return _profile;
 }
 
 function buildCurl(opts: { method?: string; url: string; headers?: Record<string, string>; body?: any }) {
-  const method = (opts.method || 'GET').toUpperCase();
-  const parts: string[] = [
-    `curl --location '${opts.url}'`,
-    `--request ${method}`,
-  ];
-  const headers = opts.headers || {};
-  for (const [k, v] of Object.entries(headers)) {
-    parts.push(`--header '${k}: ${v}'`);
-  }
-  if (opts.body !== undefined && opts.body !== null) {
-    const bodyStr = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
-    parts.push(`--data '${bodyStr}'`);
-  }
-  return parts.join(' \\\n');
+    const method = (opts.method || 'GET').toUpperCase();
+    const parts: string[] = [
+        `curl --location '${opts.url}'`,
+        `--request ${method}`,
+    ];
+    const headers = opts.headers || {};
+    for (const [k, v] of Object.entries(headers)) {
+        parts.push(`--header '${k}: ${v}'`);
+    }
+    if (opts.body !== undefined && opts.body !== null) {
+        const bodyStr = typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body);
+        parts.push(`--data '${bodyStr}'`);
+    }
+    return parts.join(' \\\n');
 }
 
 export async function fetchProfile(force = false): Promise<DriverBuddyProfile> {
-  const token = getToken();
-  if (!token) throw new Error('No token');
-  if (_profile && !force) return _profile;
+    const token = getToken();
+    if (!token) throw new Error('No token');
+    if (_profile && !force) return _profile;
 
-  const reqInit: RequestInit = {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  };
+    const reqInit: RequestInit = {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    };
 
-  if (isDebug()) {
-    try {
-      // Print the curl for debugging
-      console.log(buildCurl({ url: API_URL, headers: reqInit.headers as Record<string, string> }));
-    } catch {}
-  }
+    if (isDebug()) {
+        try {
+            // Print the curl for debugging
+            console.log(buildCurl({url: API_URL, headers: reqInit.headers as Record<string, string>}));
+        } catch {
+        }
+    }
 
-  const res = await fetch(API_URL, reqInit);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  _profile = await res.json();
-  notify();
-  return _profile;
+    const res = await fetch(API_URL, reqInit);
+    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+    _profile = await res.json();
+    notify();
+    return _profile;
 }
 
 export function subscribe(cb: (p: DriverBuddyProfile) => void) {
-  listeners.add(cb);
-  // return unsubscribe
-  return () => listeners.delete(cb);
+    listeners.add(cb);
+    // return unsubscribe
+    return () => listeners.delete(cb);
 }
 
 export type RewardClaimResponse = {
-  bonus_type: string;
-  bonus_amount: number;
-  new_balance: number;
-  claim_time: number; // epoch seconds
+    bonus_type: string;
+    bonus_amount: number;
+    new_balance: number;
+    claim_time: number; // epoch seconds
 };
 
-export async function claimDailyCheckin(body?: { bonus_type?: string; bonus_amount?: number; claim_time?: number }): Promise<RewardClaimResponse> {
-  const token = getToken();
-  if (!token) throw new Error('No token');
-  const url = `${API_URL}/rewards?type=DAILY_CHECKIN`;
-  const payload = {
-    bonus_type: 'DAILY_CHECKIN',
-    bonus_amount: 10,
-    claim_time: Math.floor(Date.now() / 1000),
-    ...(body || {}),
-  };
-  const reqInit: RequestInit = {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  };
+export async function claimDailyCheckin(body?: {
+    bonus_type?: string;
+    bonus_amount?: number;
+    claim_time?: number
+}): Promise<RewardClaimResponse> {
+    const token = getToken();
+    if (!token) throw new Error('No token');
+    const url = `${API_URL}/rewards?type=DAILY_CHECKIN`;
+    const payload = {
+        bonus_type: 'DAILY_CHECKIN',
+        bonus_amount: 10,
+        claim_time: Math.floor(Date.now() / 1000),
+        ...(body || {}),
+    };
+    const reqInit: RequestInit = {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    };
 
-  if (isDebug()) {
-    try {
-      console.log(
-        buildCurl({ method: 'POST', url, headers: reqInit.headers as Record<string, string>, body: payload })
-      );
-    } catch {}
-  }
-
-  const res = await fetch(url, reqInit);
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Claim failed: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
-  }
-  const data = (await res.json()) as RewardClaimResponse;
-  // update local cache if new_balance present
-  try {
-    if (_profile && typeof data?.new_balance === 'number') {
-      _profile = { ..._profile, balance: data.new_balance } as DriverBuddyProfile;
-      notify();
+    if (isDebug()) {
+        try {
+            console.log(
+                buildCurl({method: 'POST', url, headers: reqInit.headers as Record<string, string>, body: payload})
+            );
+        } catch {
+        }
     }
-  } catch {}
-  return data;
+
+    const res = await fetch(url, reqInit);
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new ApiError(res.status, `Claim failed: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
+    }
+
+    const data = (await res.json()) as RewardClaimResponse;
+    // update local cache if new_balance present
+    try {
+        if (_profile && typeof data?.new_balance === 'number') {
+            _profile = {..._profile, balance: data.new_balance} as DriverBuddyProfile;
+            notify();
+        }
+    } catch {
+    }
+    return data;
 }
 
 export default {
-  initFromUrlOrStorage,
-  getToken,
-  setToken,
-  fetchProfile,
-  getProfile,
-  subscribe,
-  claimDailyCheckin,
+    initFromUrlOrStorage,
+    getToken,
+    setToken,
+    fetchProfile,
+    getProfile,
+    subscribe,
+    claimDailyCheckin,
 };

@@ -3,6 +3,7 @@ import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
+import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile } from "@/services/globalApi";
 
 export class HomeScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
@@ -19,6 +20,7 @@ export class HomeScene extends Phaser.Scene {
 
     private bike!: Phaser.GameObjects.Image;
     private levelButton!: UiButton;
+    private unsubscribeProfile?: () => void;
 
     constructor() {
         super(Scence.Home);
@@ -187,9 +189,80 @@ export class HomeScene extends Phaser.Scene {
 
         layout();
         this.scale.on("resize", layout);
+
+        // After initial layout, try to load token and profile via globalApi
+        const token = initFromUrlOrStorage();
+        // Subscribe to global profile changes
+        this.unsubscribeProfile = subscribe((p) => {
+            if (p) {
+                this.applyProfile(p).catch(() => {});
+            }
+        });
+        // Apply cached profile immediately if available
+        const cached = getProfile();
+        if (cached) {
+            this.applyProfile(cached).catch(() => {});
+        }
+        // Ensure we cleanup subscription when scene ends
+        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.unsubscribeProfile?.();
+            this.unsubscribeProfile = undefined;
+        });
+        this.events.on(Phaser.Scenes.Events.DESTROY, () => {
+            this.unsubscribeProfile?.();
+            this.unsubscribeProfile = undefined;
+        });
+        if (token) {
+            fetchProfile().then(p => this.applyProfile(p)).catch(() => {});
+        } else {
+            // keep defaults if no token
+        }
     }
 
     update() {}
+
+    private async applyProfile(data: DriverBuddyProfile) {
+        if (!data) return;
+        try {
+            // Update level text
+            const level = data?.buddy?.level ?? 1;
+            this.levelButton?.setText(`CẤP ĐỘ ${level}`);
+
+            // Enable/disable upgrade per can_upgrade
+            const canUpgrade = !!data?.can_upgrade;
+            this.btnUpgrade?.setEnabled(canUpgrade);
+
+            // Update bike image to buddy.img_url if available
+            const imgUrl: string | undefined = data?.buddy?.img_url;
+            if (imgUrl && typeof imgUrl === 'string') {
+                await this.loadExternalImageAndApply('buddy_bike', imgUrl, this.bike);
+            }
+        } catch {}
+    }
+
+    private loadExternalImageAndApply(key: string, url: string, target: Phaser.GameObjects.Image): Promise<void> {
+        return new Promise((resolve) => {
+            // If already loaded with same key, just swap
+            if (this.textures.exists(key)) {
+                target.setTexture(key);
+                this.fitWidth(target, this.scale.width * 0.85);
+                resolve();
+                return;
+            }
+            // Use a unique key per URL to avoid cache collisions
+            const uniqueKey = `${key}_${Date.now()}`;
+            this.load.image(uniqueKey, url);
+            this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+                try {
+                    target.setTexture(uniqueKey);
+                    this.fitWidth(target, this.scale.width * 0.85);
+                } finally {
+                    resolve();
+                }
+            });
+            this.load.start();
+        });
+    }
 
     // Helpers
     private coverTo(img: Phaser.GameObjects.Image, width: number, height: number) {

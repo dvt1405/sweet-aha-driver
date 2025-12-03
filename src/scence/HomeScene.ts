@@ -9,6 +9,7 @@ import {
     getProfile,
     subscribe,
     claimDailyCheckin,
+    fetchCoinHistoryItems,
     type DriverBuddyProfile
 } from "@/services/globalApi";
 import {is} from "@babel/types";
@@ -110,22 +111,16 @@ export class HomeScene extends Phaser.Scene {
         });
 
         // History click
-        this.btnHistory.onClick(() => {
-            // mock data to illustrate both + and - numbers
-            const mock = [
-                {title: "Hoàn thành đơn", date: "12/11/2025", amount: 20},
-                {title: "Điểm danh mỗi ngày", date: "12/11/2025", amount: 5},
-                {title: "Nâng cấp xe", date: "12/11/2025", amount: -3000},
-                {title: "Chia sẻ mạng xã hội", date: "12/11/2025", amount: 5},
-                {title: "Hoàn thành đơn", date: "12/11/2025", amount: 20},
-                {title: "Điểm danh mỗi ngày", date: "12/11/2025", amount: 5},
-                {title: "Điểm danh mỗi ngày", date: "12/11/2025", amount: 5},
-                {title: "Điểm danh mỗi ngày", date: "12/11/2025", amount: 5},
-            ];
-            // Toggle between empty and list by switching to [] if needed
-            const items = mock; // change to [] to see empty state
-            this.scene.launch(Scence.CoinHistory, {items});
-            this.scene.bringToTop(Scence.CoinHistory);
+        this.btnHistory.onClick(async () => {
+            try {
+                const items = await fetchCoinHistoryItems();
+                this.scene.launch(Scence.CoinHistory, {items});
+                this.scene.bringToTop(Scence.CoinHistory);
+            } catch (e) {
+                // On any error, open empty state popup
+                this.scene.launch(Scence.CoinHistory, {items: []});
+                this.scene.bringToTop(Scence.CoinHistory);
+            }
         });
 
         // Bike image

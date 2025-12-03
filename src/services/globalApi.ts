@@ -250,6 +250,74 @@ export async function claimDailyCheckin(body?: {
     return data;
 }
 
+export type CoinTransaction = {
+    _id: string;
+    transaction_type: string;
+    amount: number;
+    current_balance?: number;
+    new_balance?: number;
+    metadata?: { bonus_type?: string; description?: string };
+    create_time: number; // epoch seconds
+};
+
+export type CoinHistoryListItem = { title: string; date: string; amount: number };
+
+/**
+ * Fetch raw transactions of driver-buddy.
+ */
+export async function fetchCoinTransactions(): Promise<CoinTransaction[]> {
+    const token = getToken();
+    if (!token) throw new Error('No token');
+    const url = `${API_URL}/transactions`;
+    const reqInit: RequestInit = {
+        headers: { Authorization: `Bearer ${token}` },
+    };
+    if (isDebug()) {
+        try {
+            console.log(buildCurl({ url, headers: reqInit.headers as Record<string, string> }));
+        } catch {}
+    }
+    const res = await fetch(url, reqInit);
+    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+    return await res.json();
+}
+
+/**
+ * Convenience helper returning mapped items for UI popup list.
+ */
+export async function fetchCoinHistoryItems(): Promise<CoinHistoryListItem[]> {
+    const raw = await fetchCoinTransactions();
+    const fmt = (ts: number) => {
+        try {
+            const d = new Date((ts || 0) * 1000);
+            const dd = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            return dd;
+        } catch { return ''; }
+    };
+    const mapTitle = (t?: string, bonus?: string, desc?: string) => {
+        if (desc && desc.trim().length) return desc;
+        switch (t) {
+            case 'DAILY_BONUS':
+                if (bonus === 'DAILY_CHECKIN') return 'Điểm danh mỗi ngày';
+                return 'Thưởng hằng ngày';
+            case 'ORDER_COMPLETED':
+                return 'Hoàn thành đơn';
+            case 'UPGRADE_BUDDY':
+            case 'UPGRADE':
+                return 'Nâng cấp xe';
+            case 'SHARE_SOCIAL':
+                return 'Chia sẻ mạng xã hội';
+            default:
+                return 'Giao dịch';
+        }
+    };
+    return raw.map((r) => ({
+        title: mapTitle(r.transaction_type, r.metadata?.bonus_type, r.metadata?.description),
+        date: fmt(r.create_time),
+        amount: r.amount,
+    }));
+}
+
 export default {
     initFromUrlOrStorage,
     getToken,
@@ -258,4 +326,6 @@ export default {
     getProfile,
     subscribe,
     claimDailyCheckin,
+    fetchCoinTransactions,
+    fetchCoinHistoryItems,
 };

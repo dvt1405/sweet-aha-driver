@@ -139,10 +139,37 @@ export default class UiButton extends Phaser.GameObjects.Container {
     }
 
     public onClick(cb: () => void) {
+        // Remove previous click listeners to avoid multiple bindings
+
+        this.on("click", () => {
+            console.log('onclick')
+            if (this._enabled) cb();
+        })
+
+        this.off("pointerdown");
         this.off("pointerup");
-        this.on("pointerup", () => {
+        this.off("pointerupoutside");
+        // Trigger action on pointerdown for more reliable mobile clicks
+        this.on("pointerdown", () => {
+            console.log('clicked')
             if (this._enabled) cb();
         });
+
+        // Fallbacks in case some platforms only emit pointerup
+        this.on("pointerup", () => {
+            // no-op on purpose to avoid double fire; keep for compatibility
+        });
+        this.on("pointerupoutside", () => {
+            // no-op
+        });
+        this.on("touchend", () => {
+            if (this._enabled) cb();
+        })
+        
+        // Ensure hand cursor is shown
+        if (this.input) {
+            this.input.cursor = 'pointer';
+        }
         return this;
     }
 
@@ -165,6 +192,8 @@ export default class UiButton extends Phaser.GameObjects.Container {
         this.setSize(w, h);
         this.removeInteractive();
         if (this._enabled) {
+            // For Containers positioned by center with children at (0,0),
+            // the local hit area must be centered as well
             this.setInteractive(
                 new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
                 Phaser.Geom.Rectangle.Contains
@@ -178,6 +207,7 @@ export default class UiButton extends Phaser.GameObjects.Container {
             this.removeInteractive();
         } else {
             const w = this.width, h = this.height;
+            // Center the hit area on the container's position
             this.setInteractive(
                 new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h),
                 Phaser.Geom.Rectangle.Contains

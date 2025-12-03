@@ -23,6 +23,10 @@ export default class GuideScene extends Phaser.Scene {
   private contentHeight = 0;
   private scrollY = 0; // negative number when scrolled up
 
+  // cached panel size to avoid relying on Graphics.getBounds()
+  private panelWidthPx = 0;
+  private panelHeightPx = 0;
+
   constructor() {
     super("GuideScene");
   }
@@ -34,7 +38,7 @@ export default class GuideScene extends Phaser.Scene {
     // Dim background
     this.dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
       .setInteractive({useHandCursor: false});
-    this.dim.on("pointerup", () => this.stop());
+    this.dim.on("pointerdown", () => this.stop());
 
     // Panel container
     this.panel = this.add.container(w / 2, h / 2);
@@ -42,6 +46,8 @@ export default class GuideScene extends Phaser.Scene {
     // White rounded panel with subtle border & shadow
     const panelW = Math.min(620 * su, w * 0.9);
     const panelH = Math.min(980 * su, h * 0.8);
+    this.panelWidthPx = panelW;
+    this.panelHeightPx = panelH;
     const radius = 24 * su;
 
     const gfx = this.add.graphics();
@@ -184,7 +190,7 @@ export default class GuideScene extends Phaser.Scene {
   private drawScrollbar(panelW: number, padX: number, padY: number, scrollH: number) {
     // Draw track on the right inside the panel
     const x = this.panel.x + panelW / 2 - padX / 2;
-    const y = this.panel.y - (panelH(this.panel) / 2) + padY; // helper below
+    const y = this.panel.y - (this.panelHeightPx / 2) + padY;
     this.scrollTrack.clear();
     this.scrollTrack.fillStyle(0xDADDE2, 1);
     this.scrollTrack.fillRoundedRect(x - 2, y, 4, scrollH, 2);
@@ -196,12 +202,12 @@ export default class GuideScene extends Phaser.Scene {
     if (!panel) return;
     const su = scaleUnit();
 
-    const panelW = widthOf(panel);
-    const panelH = panelH(panel);
+    const panelWidth = this.panelWidthPx;
+    const panelHeight = this.panelHeightPx;
     const padX = 24 * su;
     const padY = 20 * su;
-    const trackX = panel.x + panelW / 2 - padX / 2;
-    const trackY = panel.y - panelH / 2 + padY;
+    const trackX = panel.x + panelWidth / 2 - padX / 2;
+    const trackY = panel.y - panelHeight / 2 + padY;
     const trackH = this.scrollAreaHeight;
 
     this.scrollThumb.clear();
@@ -235,9 +241,12 @@ function boundsOf(c: Phaser.GameObjects.Container): Phaser.Geom.Rectangle {
   const list = c.list as Phaser.GameObjects.GameObject[];
   for (const go of list) {
     if (go instanceof Phaser.GameObjects.Graphics) {
-      // graphics bounds need manual rectangle used when drawing; approximate by last command
-      const b = go.getBounds();
-      if (b.width && b.height) return b;
+      // Graphics in some Phaser builds may not expose getBounds(). Guard the call.
+      const anyGo = go as any;
+      if (anyGo && typeof anyGo.getBounds === "function") {
+        const b = anyGo.getBounds();
+        if (b && b.width && b.height) return b as Phaser.Geom.Rectangle;
+      }
     }
   }
   // fallback

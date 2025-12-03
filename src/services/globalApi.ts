@@ -184,6 +184,56 @@ export function subscribe(cb: (p: DriverBuddyProfile) => void) {
   return () => listeners.delete(cb);
 }
 
+export type RewardClaimResponse = {
+  bonus_type: string;
+  bonus_amount: number;
+  new_balance: number;
+  claim_time: number; // epoch seconds
+};
+
+export async function claimDailyCheckin(body?: { bonus_type?: string; bonus_amount?: number; claim_time?: number }): Promise<RewardClaimResponse> {
+  const token = getToken();
+  if (!token) throw new Error('No token');
+  const url = `${API_URL}/rewards?type=DAILY_CHECKIN`;
+  const payload = {
+    bonus_type: 'DAILY_CHECKIN',
+    bonus_amount: 10,
+    claim_time: Math.floor(Date.now() / 1000),
+    ...(body || {}),
+  };
+  const reqInit: RequestInit = {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  };
+
+  if (isDebug()) {
+    try {
+      console.log(
+        buildCurl({ method: 'POST', url, headers: reqInit.headers as Record<string, string>, body: payload })
+      );
+    } catch {}
+  }
+
+  const res = await fetch(url, reqInit);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Claim failed: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
+  }
+  const data = (await res.json()) as RewardClaimResponse;
+  // update local cache if new_balance present
+  try {
+    if (_profile && typeof data?.new_balance === 'number') {
+      _profile = { ..._profile, balance: data.new_balance } as DriverBuddyProfile;
+      notify();
+    }
+  } catch {}
+  return data;
+}
+
 export default {
   initFromUrlOrStorage,
   getToken,
@@ -191,4 +241,5 @@ export default {
   fetchProfile,
   getProfile,
   subscribe,
+  claimDailyCheckin,
 };

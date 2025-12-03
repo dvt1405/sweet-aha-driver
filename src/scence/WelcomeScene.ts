@@ -4,6 +4,7 @@ import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import {getAppFontFamily, loadAppFont} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
+import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile } from "@/services/globalApi";
 
 export class WelcomeScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
@@ -12,11 +13,13 @@ export class WelcomeScene extends Phaser.Scene {
     private shareIcon!: Phaser.GameObjects.Image;
     private titleImage!: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
+    private coinText!: Phaser.GameObjects.Text;
     private congratsText!: Phaser.GameObjects.Text;
     private levelButton!: UiButton;
     private burst!: Phaser.GameObjects.Image;
     private bike!: Phaser.GameObjects.Image;
     private closeBtn!: UiButton;
+    private unsubscribeProfile?: () => void;
 
     // Animation icon shapes
     private iconStarOrange!: Phaser.GameObjects.Image;
@@ -181,6 +184,15 @@ export class WelcomeScene extends Phaser.Scene {
         this.closeBtn = new UiButton(this, width / 3, height - 96 * scaleUnit(), "ĐÓNG", width * 0.5);
         this.add.existing(this.closeBtn);
         this.closeBtn.onClick(() => {
+            // Mark welcome as seen so we don't show this scene again on next visits
+            try {
+                if (typeof window !== "undefined") {
+                    window.localStorage.setItem("welcomeSeen", "true");
+                }
+            } catch (e) {
+                // ignore storage errors
+            }
+
             this.tweens.add({
                 targets: this.children.getChildren(),
                 alpha: 0,
@@ -307,7 +319,7 @@ export class WelcomeScene extends Phaser.Scene {
         });
 
         // Make the coin text on bar
-        const coinText = this.add.text(0, 0, "0 XU".toUpperCase(), {
+        this.coinText = this.add.text(0, 0, "$0 XU".toUpperCase(), {
             fontFamily: getAppFontFamily(),
             fontStyle: "600", // 400 regular
             fontSize: 50,
@@ -316,7 +328,7 @@ export class WelcomeScene extends Phaser.Scene {
             stroke: '#FFFFFF',
             strokeThickness: 8,
         }).setOrigin(0.5);
-        coinText.setPosition(this.coinBar.x, this.coinBar.y);
+        this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
         // Position coin icon and coin text relative to bar
         const layout = () => {
@@ -331,6 +343,7 @@ export class WelcomeScene extends Phaser.Scene {
             this.coinIcon.setPosition(this.coinBar.x + this.coinBar.width / 2, this.coinBar.y);
             this.shareIcon.setPosition(w - 50, h * 0.078);
             this.fitHeight(this.shareIcon, h * 0.055);
+            this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
             // Title
             if (this.titleImage) {
@@ -411,6 +424,35 @@ export class WelcomeScene extends Phaser.Scene {
 
         layout();
         this.scale.on('resize', layout);
+
+        // Initialize token/debug from URL or storage and sync coin text with profile balance
+        const token = initFromUrlOrStorage();
+        const applyProfile = (p: DriverBuddyProfile | null) => {
+            const balance = Math.max(0, Math.floor(p?.balance ?? 0));
+            if (this.coinText) {
+                this.coinText.setText(`${balance} XU`.toUpperCase());
+            }
+        };
+        // Subscribe to global profile changes
+        this.unsubscribeProfile = subscribe((p) => {
+            if (p) applyProfile(p);
+        });
+        // Apply cached profile immediately if available
+        const cached = getProfile();
+        if (cached) applyProfile(cached);
+        // Cleanup subscription on scene end
+        this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.unsubscribeProfile?.();
+            this.unsubscribeProfile = undefined;
+        });
+        this.events.on(Phaser.Scenes.Events.DESTROY, () => {
+            this.unsubscribeProfile?.();
+            this.unsubscribeProfile = undefined;
+        });
+        // Fetch latest profile if token exists
+        if (token) {
+            fetchProfile().then(applyProfile).catch(() => {});
+        }
     }
 
     // Utility: scale image to cover the game area

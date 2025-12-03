@@ -3,15 +3,18 @@ import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
-import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile } from "@/services/globalApi";
+import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, claimDailyCheckin, type DriverBuddyProfile } from "@/services/globalApi";
 
 export class HomeScene extends Phaser.Scene {
+    private claiming = false;
+    private static CHECKIN_KEY = 'aha_daily_checkin_date';
     private bg!: Phaser.GameObjects.Image;
     private coinBar!: Phaser.GameObjects.Image;
     private coinIcon!: Phaser.GameObjects.Image;
     private shareIcon!: Phaser.GameObjects.Image;
     private titleImage?: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
+    private coinText!: Phaser.GameObjects.Text;
 
     private btnCheckIn!: UiButton;
     private btnUpgrade!: UiButton;
@@ -37,6 +40,8 @@ export class HomeScene extends Phaser.Scene {
         this.load.image("bg_progress_active", "/bg_progress_active.png");
         this.load.image("main_header", "/main_header.png");
         this.load.image("bike", "/ic_bike.png");
+        // Popup overlay image for claim success
+        this.load.image("overlay_popup", "/overlay_popup.png");
     }
 
     create() {
@@ -76,6 +81,8 @@ export class HomeScene extends Phaser.Scene {
         // Feature buttons (2x2 grid)
         this.btnCheckIn = new UiButton(this, w * 0.3, h * 0.40, "ĐIỂM DANH", w * 0.42);
         this.add.existing(this.btnCheckIn);
+        // Daily check-in handler
+        this.btnCheckIn.onClick(() => this.handleDailyCheckin());
 
         this.btnUpgrade = new UiButton(this, w * 0.7, h * 0.40, "NÂNG CẤP XE", w * 0.42, false);
         this.add.existing(this.btnUpgrade);
@@ -127,7 +134,7 @@ export class HomeScene extends Phaser.Scene {
         this.add.existing(this.levelButton);
 
         // Coin text on the bar
-        const coinText = this.add.text(0, 0, "0 XU".toUpperCase(), {
+        this.coinText = this.add.text(0, 0, "$0 XU".toUpperCase(), {
             fontFamily: getAppFontFamily(),
             fontStyle: "600",
             fontSize: 50,
@@ -150,7 +157,7 @@ export class HomeScene extends Phaser.Scene {
             this.coinIcon.setPosition(this.coinBar.x + this.coinBar.width / 2, this.coinBar.y);
             this.shareIcon.setPosition(w2 - 50, h2 * 0.078);
             this.fitHeight(this.shareIcon, h2 * 0.055);
-            coinText.setPosition(this.coinBar.x, this.coinBar.y);
+            this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
             // Title
             if (this.titleImage) {
@@ -190,6 +197,9 @@ export class HomeScene extends Phaser.Scene {
         layout();
         this.scale.on("resize", layout);
 
+        // Initial check-in button state from local storage
+        this.updateCheckinButtonState();
+
         // After initial layout, try to load token and profile via globalApi
         const token = initFromUrlOrStorage();
         // Subscribe to global profile changes
@@ -228,6 +238,12 @@ export class HomeScene extends Phaser.Scene {
             const level = data?.buddy?.level ?? 1;
             this.levelButton?.setText(`CẤP ĐỘ ${level}`);
 
+            // Update coin text "$balance XU"
+            const balance = Math.max(0, Math.floor(data?.balance ?? 0));
+            if (this.coinText) {
+                this.coinText.setText(`${balance} XU`.toUpperCase());
+            }
+
             // Enable/disable upgrade per can_upgrade
             const canUpgrade = !!data?.can_upgrade;
             this.btnUpgrade?.setEnabled(canUpgrade);
@@ -238,6 +254,107 @@ export class HomeScene extends Phaser.Scene {
                 await this.loadExternalImageAndApply('buddy_bike', imgUrl, this.bike);
             }
         } catch {}
+    }
+
+    private async handleDailyCheckin() {
+        if (this.claiming) return;
+        this.claiming = true;
+        try {
+            // Call claim API
+            const res = await claimDailyCheckin();
+            // Disable button for the rest of the day
+            this.markCheckedInToday();
+            this.updateCheckinButtonState();
+            // Show success popup with dynamic amount
+            this.showClaimPopup(res?.bonus_amount ?? 0);
+            // Refresh profile to update balance
+            await fetchProfile(true).catch(() => {});
+        } catch (e) {
+            // If already claimed or any error, disable for safety this day
+            this.markCheckedInToday();
+            this.updateCheckinButtonState();
+        } finally {
+            this.claiming = false;
+        }
+    }
+
+    private markCheckedInToday() {
+        try {
+            const today = new Date();
+            const key = HomeScene.CHECKIN_KEY;
+            const value = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(key, value);
+            }
+        } catch {}
+    }
+
+    private hasCheckedInToday(): boolean {
+        try {
+            if (typeof window === 'undefined') return false;
+            const value = window.localStorage.getItem(HomeScene.CHECKIN_KEY);
+            if (!value) return false;
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+            return value === todayStr;
+        } catch {
+            return false;
+        }
+    }
+
+    private updateCheckinButtonState() {
+        try {
+            const disabled = this.hasCheckedInToday();
+            this.btnCheckIn?.setEnabled(!disabled);
+        } catch {}
+    }
+
+    private showClaimPopup(amount: number) {
+        const { width: w, height: h } = this.scale;
+        // Dark backdrop
+        const backdrop = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.55)
+            .setInteractive({ useHandCursor: false });
+
+        // Popup image centered
+        const popup = this.add.image(w/2, h/2, 'overlay_popup').setOrigin(0.5);
+        const targetW = Math.min(w * 0.8, 340);
+        this.fitWidth(popup as any, targetW);
+
+        // Amount text displayed roughly at the yellow bar center in image
+        const amountText = this.add.text(w/2, 0, `${amount} XU`, {
+            fontFamily: getAppFontFamily(),
+            fontStyle: '800',
+            fontSize: 44,
+            color: '#FFFFFF',
+            align: 'center',
+            stroke: '#3F5F00',
+            strokeThickness: 10,
+        }).setOrigin(0.5);
+
+        // Position amount text at approximate bar Y (tuned for provided image)
+        const popupBarOffsetY = popup.displayHeight * 0.04; // small tweak
+        amountText.setPosition(w/2, popup.y + popupBarOffsetY);
+
+        // Close button at bottom
+        const closeBtn = new UiButton(this, w/2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
+        this.add.existing(closeBtn);
+        closeBtn.onClick(() => close());
+
+        // Auto close on backdrop click
+        backdrop.on('pointerdown', () => close());
+
+        // Bring to top layering
+        this.children.bringToTop(backdrop);
+        this.children.bringToTop(popup);
+        this.children.bringToTop(amountText);
+        this.children.bringToTop(closeBtn);
+
+        const close = () => {
+            backdrop.destroy();
+            popup.destroy();
+            amountText.destroy();
+            closeBtn.destroy();
+        };
     }
 
     private loadExternalImageAndApply(key: string, url: string, target: Phaser.GameObjects.Image): Promise<void> {

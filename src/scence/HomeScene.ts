@@ -12,8 +12,45 @@ import {
     fetchCoinHistoryItems,
     type DriverBuddyProfile
 } from "@/services/globalApi";
+import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
 import {is} from "@babel/types";
 import {ApiError} from "next/dist/server/api-utils";
+
+/**
+ * Generate test coin history data for performance testing
+ * Used when Shift key is held while clicking History button
+ */
+function generateTestCoinHistory(count: number): CoinHistoryItem[] {
+    const items: CoinHistoryItem[] = [];
+    const types = [
+        'Điểm danh mỗi ngày',
+        'Hoàn thành đơn hàng giao tại địa chỉ số 123 đường Nguyễn Văn Linh, Quận 7',
+        'Nâng cấp xe',
+        'Chia sẻ mạng xã hội',
+        'Thưởng hoàn thành 10 đơn',
+        'Bonus cuối tuần',
+        'Giao dịch đặc biệt với mô tả rất dài để test word wrap trong title text',
+    ];
+    
+    const now = Date.now();
+    for (let i = 0; i < count; i++) {
+        const date = new Date(now - i * 3600000); // 1 hour apart
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yyyy = date.getFullYear();
+        
+        const typeIdx = i % types.length;
+        const amount = typeIdx === 2 ? -100 - (i % 500) : 10 + (i % 990); // Mix positive and negative
+        
+        items.push({
+            title: types[typeIdx],
+            date: `${dd}/${mm}/${yyyy}`,
+            amount: amount,
+        });
+    }
+    
+    return items;
+}
 
 export class HomeScene extends Phaser.Scene {
     private claiming = false;
@@ -54,6 +91,7 @@ export class HomeScene extends Phaser.Scene {
         this.load.image("overlay_popup", "/overlay_popup.png");
         // Popup warning background for already-claimed case (HTTP 404)
         this.load.image("bg_popup_warning", "/bg_popup_warning.png");
+        this.load.image("popup_header", "/bg_btn_header_popup.png")
     }
 
     create() {
@@ -110,16 +148,35 @@ export class HomeScene extends Phaser.Scene {
             this.scene.bringToTop(Scence.Guide);
         });
 
-        // History click
-        this.btnHistory.onClick(async () => {
-            try {
-                const items = await fetchCoinHistoryItems();
-                this.scene.launch(Scence.CoinHistory, {items});
-                this.scene.bringToTop(Scence.CoinHistory);
-            } catch (e) {
-                // On any error, open empty state popup
-                this.scene.launch(Scence.CoinHistory, {items: []});
-                this.scene.bringToTop(Scence.CoinHistory);
+        // History click - hold Shift key to test with 1000 items
+        this.btnHistory.onClick(() => {
+            // Test mode: Shift key held = generate 1000 test items for performance testing
+            const isTestMode = this.input.keyboard && this.input.keyboard.checkDown(this.input.keyboard.addKey('SHIFT'));
+            
+            if (isTestMode) {
+                console.log('[Test Mode] Generating 1000 test coin history items...');
+                const testItems = generateTestCoinHistory(1000);
+                showCoinHistoryPopup(this, { state: 'list', items: testItems });
+            } else {
+                // Show popup immediately with loading state
+                const { popup, updateContent } = showCoinHistoryPopup(this, { state: 'loading' });
+                
+                // Fetch items asynchronously and update popup when ready
+                fetchCoinHistoryItems()
+                    .then(items => {
+                        if (items && items.length > 0) {
+                            // Update to list state with items
+                            updateContent({ state: 'list', items });
+                        } else {
+                            // Update to empty state
+                            updateContent({ state: 'empty' });
+                        }
+                    })
+                    .catch((error) => {
+                        // Update to error state with error message
+                        const errorMsg = error?.message || 'Vui lòng thử lại sau';
+                        updateContent({ state: 'error', errorMessage: errorMsg });
+                    });
             }
         });
 

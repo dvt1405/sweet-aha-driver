@@ -8,7 +8,6 @@ import BackgroundScrollScene from "@/scence/BackgroundScrollScene";
 import BikeScene from "@/scence/BikeScene";
 import {HomeScene} from "@/scence/HomeScene";
 import GuideScene from "@/scence/GuideScene";
-import CoinHistoryScene from "@/scence/CoinHistoryScene";
 import BootScene from "@/scence/BootScene";
 
 export default function BikeGame() {
@@ -33,7 +32,7 @@ export default function BikeGame() {
             width: 1080,
             height: 1920,
             backgroundColor: "#000000",
-            scene: [BootScene, WelcomeScene, HomeScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene, GuideScene, CoinHistoryScene],
+            scene: [BootScene, WelcomeScene, HomeScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene, GuideScene],
             physics: {default: "arcade"},
             scale: {
                 mode: Phaser.Scale.FIT,

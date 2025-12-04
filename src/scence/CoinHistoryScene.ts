@@ -24,7 +24,7 @@ export type PopupContentData = {
  * Popup shows immediately; images load asynchronously if not cached
  */
 export function showCoinHistoryPopup(
-    scene: Phaser.Scene, 
+    scene: Phaser.Scene,
     contentData: PopupContentData
 ): { popup: BasePopup; updateContent: (newData: PopupContentData) => void } {
     const {width: w, height: h} = scene.scale;
@@ -40,12 +40,11 @@ export function showCoinHistoryPopup(
         closeButtonText: "ĐÓNG",
     });
 
-    const panelW = popup.width;
-    const listW = panelW - 24 * su; // Account for BasePopup's internal padding
+    const listW = popup.content.width * 0.9 - 24 * su; // Account for BasePopup's internal padding
     const listH = popup.contentHeight;
 
     // Content container for list/empty/loading/error state
-    let content = scene.add.container(0, 0);
+    const content = scene.add.container((w - listW)/2, 0);
     popup.content.add(content);
 
     // Build initial content based on state
@@ -59,7 +58,7 @@ export function showCoinHistoryPopup(
         buildContent(scene, content, popup, newData, listW, listH, su);
     };
 
-    return { popup, updateContent };
+    return {popup, updateContent};
 }
 
 /**
@@ -74,7 +73,6 @@ function buildContent(
     h: number,
     su: number
 ) {
-
     switch (data.state) {
         case 'loading':
             createLoadingState(scene, content, w, h, su);
@@ -116,7 +114,7 @@ function createLoadingState(
     spinner.beginPath();
     spinner.arc(0, 0, radius, 0, Math.PI * 1.5, false); // Arc centered at origin
     spinner.strokePath();
-    
+
     // Position the graphics object at screen center
     spinner.setPosition(centerX, centerY);
     content.add(spinner);
@@ -161,6 +159,7 @@ function createErrorState(
     errorMessage?: string
 ) {
     const centerY = h * 0.4;
+    const centerX = w / 2;
 
     // Error icon (red circle with X)
     const errorIcon = scene.add.graphics();
@@ -199,7 +198,7 @@ function createErrorState(
                 fontSize: Math.round(16 * su),
                 color: '#7B7B7B',
                 align: 'center',
-                wordWrap: { width: w * 0.8, useAdvancedWrap: true }
+                wordWrap: {width: w * 0.8, useAdvancedWrap: true}
             }
         ).setOrigin(0.5);
         content.add(errorDesc);
@@ -212,6 +211,7 @@ function createErrorState(
     const mask = maskGfx.createGeometryMask();
     content.setMask(mask);
     maskGfx.setVisible(false);
+    errorTitle.setX(centerX);
 }
 
 function createEmptyState(
@@ -222,7 +222,7 @@ function createEmptyState(
     su: number
 ) {
     const illuY = h * 0.32;
-    
+
     // Title (show immediately)
     const title = scene.add.text(w / 2, illuY + 100 * su, "Chưa có lịch sử xu", {
         fontFamily: getAppFontFamily(),
@@ -258,7 +258,7 @@ function createEmptyState(
         const scale = targetSize / Math.max(illu.width, illu.height);
         illu.setScale(scale);
         content.add(illu);
-        
+
         // Adjust title position
         title.setY(illu.y + illu.displayHeight / 2 + 24 * su);
         hint.setY(title.y + title.height / 2 + 16 * su);
@@ -272,7 +272,7 @@ function createEmptyState(
                 const scale = targetSize / Math.max(illu.width, illu.height);
                 illu.setScale(scale);
                 content.add(illu);
-                
+
                 // Adjust title position
                 title.setY(illu.y + illu.displayHeight / 2 + 24 * su);
                 hint.setY(title.y + title.height / 2 + 16 * su);
@@ -322,8 +322,7 @@ function calculateItemLayouts(
 ): ItemLayout[] {
     const itemSpacing = 8 * su;
     const amountReservedSpace = 150 * su;
-    const titleMaxWidth = w - amountReservedSpace - 12 * su;
-    
+    const titleMaxWidth = w;
     const layouts: ItemLayout[] = [];
     let y = 0;
 
@@ -345,31 +344,31 @@ function calculateItemLayouts(
 
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        
+
         // Add separator height (skip first item)
         if (i > 0) {
             y += 1;
         }
 
         const rowStartY = y;
-        
+
         // Measure title height
         tempTitle.setText(item.title);
         const titleH = tempTitle.height;
-        
+
         // Measure date height
         tempDate.setText(item.date);
         const dateH = tempDate.height;
-        
+
         // Calculate total row height
         const rowHeight = 12 * su + titleH + 4 * su + dateH + itemSpacing;
-        
+
         layouts.push({
             index: i,
             y: rowStartY,
             height: rowHeight,
         });
-        
+
         y += rowHeight;
     }
 
@@ -391,13 +390,14 @@ function createItemPool(
 ): PooledItemView[] {
     const pool: PooledItemView[] = [];
     const amountReservedSpace = 150 * su;
-    const titleMaxWidth = w - amountReservedSpace - 12 * su;
+    const titleMaxWidth = w - 12 * su;
+    const amountRightPadding = 0; // Add right padding to prevent clipping
 
     for (let i = 0; i < poolSize; i++) {
         const container = scene.add.container(0, 0);
-        
-        const separator = scene.add.rectangle(0, 0, w, 1, 0xE0E3E6, 0.6).setOrigin(0, 0);
-        
+        container.width = w;
+        const separator = scene.add.rectangle(0, 0, w, su, 0xE0E3E6, 1).setOrigin(0, 0);
+
         const titleText = scene.add.text(0, 0, '', {
             fontFamily: getAppFontFamily(),
             fontStyle: '800',
@@ -421,7 +421,7 @@ function createItemPool(
             color: '#F0A400',
             align: 'right',
         }).setOrigin(1, 0);
-
+        amountText.setPosition()
         container.add([separator, titleText, dateText, amountText]);
         container.setVisible(false);
 
@@ -458,6 +458,7 @@ function updatePooledView(
 
     const rowStartY = isFirstItem ? 0 : 1;
     const titleY = rowStartY + 12 * su;
+    const amountRightPadding = 8 * su; // Match padding from createItemPool
 
     // Update title
     view.titleText.setText(item.title);
@@ -470,9 +471,10 @@ function updatePooledView(
     // Update amount
     const amountStr = `${item.amount >= 0 ? '+' : ''}${formatNumber(item.amount)} xu`;
     const amountColor = item.amount >= 0 ? '#F0A400' : '#3D5061';
+    console.log(amountStr, amountColor);
     view.amountText.setText(amountStr);
     view.amountText.setColor(amountColor);
-    view.amountText.setPosition(w, titleY);
+    view.amountText.setPosition(w - amountRightPadding, titleY);
 }
 
 /**
@@ -501,7 +503,9 @@ function createList(
     const pool = createItemPool(scene, poolSize, w, su);
 
     // Add pool containers to content
-    pool.forEach(view => content.add(view.container));
+    pool.forEach(view => {
+        content.add(view.container);
+    });
 
     // Track current scroll position and rendered range
     let currentScrollY = 0;

@@ -85,9 +85,8 @@ export default class BasePopup {
         const closeBtnSpace = 80 * su;
         this.content = scene.add.container(-panelW / 2, -panelH / 2 + pad + topContentPadding);
         this.content.width = panelW;
-        this.content.height = contentHeight - pad * 2 - closeBtnSpace;
+        this.content.height = contentHeight - pad * 2 ;
         this.root.add(this.content);
-        console.log(this.content.getBounds());
 
         // Close button at bottom of popup
         const closeBtnText = opts?.closeButtonText ?? "ĐÓNG";
@@ -110,10 +109,22 @@ export default class BasePopup {
         this.content.on("pointerdown", () => {
         })
 
-        // Dim click also closes
-        this.dim.on('pointerdown', () => {
-            if (opts?.onClose) opts.onClose();
-            this.destroy();
+        // Dim click: close only when clicking OUTSIDE the content area
+        this.dim.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            const contentWorldX = this.root.x + this.content.x;
+            const contentWorldY = this.root.y + this.content.y;
+            const contentRect = new Phaser.Geom.Rectangle(
+                contentWorldX,
+                contentWorldY,
+                this.content.width ?? 0,
+                this.content.height ?? 0
+            );
+            const clickedInsideContent = Phaser.Geom.Rectangle.Contains(contentRect, pointer.x, pointer.y);
+
+            if (!clickedInsideContent) {
+                if (opts?.onClose) opts.onClose();
+                this.destroy();
+            }
         });
 
         this.width = panelW;
@@ -123,6 +134,7 @@ export default class BasePopup {
         // Ensure proper z-ordering
         scene.children.bringToTop(this.dim);
         scene.children.bringToTop(this.root);
+        if (this.content) scene.children.bringToTop(this.content);
         if (this.headerImg) scene.children.bringToTop(this.headerImg);
         if (this.headerText) scene.children.bringToTop(this.headerText);
         if (this.closeBtn) scene.children.bringToTop(this.closeBtn);
@@ -141,7 +153,6 @@ export default class BasePopup {
 
         // Add header image to root container so it's destroyed with popup
         this.root.add(this.headerImg);
-
         // Title text on header badge (if provided)
         if (titleText) {
             this.headerText = this.scene.add.text(

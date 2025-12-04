@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import UiButton from "@/ui/UiButton";
+import BasePopup from "@/ui/BasePopup";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
 
@@ -8,24 +8,14 @@ import {scaleUnit} from "@/utils/CanvasSize";
  * Reuses existing textures & UiButton for styling.
  */
 export default class GuideScene extends Phaser.Scene {
-  private dim!: Phaser.GameObjects.Rectangle;
-  private panel!: Phaser.GameObjects.Container;
+  private popup!: BasePopup;
   private contentContainer!: Phaser.GameObjects.Container;
-  private maskGraphics!: Phaser.GameObjects.Graphics;
-  private maskGeom!: Phaser.GameObjects.Rectangle;
-  private closeBtn!: UiButton;
-
-  // scrollbar
   private scrollTrack!: Phaser.GameObjects.Graphics;
   private scrollThumb!: Phaser.GameObjects.Graphics;
 
-  private scrollAreaHeight = 0;
   private contentHeight = 0;
-  private scrollY = 0; // negative number when scrolled up
-
-  // cached panel size to avoid relying on Graphics.getBounds()
-  private panelWidthPx = 0;
-  private panelHeightPx = 0;
+  private viewHeight = 0;
+  private scrollY = 0;
 
   constructor() {
     super("GuideScene");
@@ -35,57 +25,23 @@ export default class GuideScene extends Phaser.Scene {
     const {width: w, height: h} = this.scale;
     const su = scaleUnit();
 
-    // Dim background
-    this.dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
-      .setInteractive({useHandCursor: false});
-    this.dim.on("pointerdown", () => this.stop());
+    // BasePopup with header and close button
+    this.popup = new BasePopup(this, {
+      width: w,
+      height: h,
+      headerImageKey: "popup_header",
+      titleText: "HƯỚNG DẪN",
+      closeButtonText: "ĐÓNG",
+      onClose: () => this.stop(),
+    });
 
-    // Panel container
-    this.panel = this.add.container(w / 2, h / 2);
+    // Scrollable content area inside popup
+    const listW = this.popup.content.width * 0.9 - 24 * su;
+    const listH = this.popup.contentHeight;
+    this.viewHeight = listH;
 
-    // White rounded panel with subtle border & shadow
-    const panelW = Math.min(620 * su, w * 0.9);
-    const panelH = Math.min(980 * su, h * 0.8);
-    this.panelWidthPx = panelW;
-    this.panelHeightPx = panelH;
-    const radius = 24 * su;
-
-    const gfx = this.add.graphics();
-    // shadow
-    gfx.fillStyle(0x000000, 0.15);
-    gfx.fillRoundedRect(-panelW / 2 + 4, -panelH / 2 + 6, panelW, panelH, radius);
-    // body
-    gfx.lineStyle(2, 0xD7D9DD, 1);
-    gfx.fillStyle(0xffffff, 1);
-    gfx.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, radius);
-    gfx.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, radius);
-    this.panel.add(gfx);
-
-    // Title badge using existing yellow button texture
-    const titleImg = this.add.image(0, -panelH / 2 - 28 * su, "bg_button_active").setOrigin(0.5);
-    // scale to a small pill width
-    const titleTargetW = Math.min(300 * su, w * 0.6);
-    const scale = titleTargetW / titleImg.width;
-    titleImg.setScale(scale);
-
-    const titleText = this.add.text(0, titleImg.y, "HƯỚNG DẪN", {
-      fontFamily: getAppFontFamily(),
-      fontStyle: "800",
-      fontSize: Math.round(32 * su),
-      color: "#6B7C0E",
-      stroke: "#FFFFFF",
-      strokeThickness: Math.max(3, Math.round(4 * su)),
-    }).setOrigin(0.5);
-
-    this.panel.add([titleImg, titleText]);
-
-    // Scrollable content region (inside padding)
-    const padX = 24 * su;
-    const padY = 20 * su;
-    const scrollW = panelW - padX * 2;
-    const scrollH = panelH - padY * 2 - 90 * su; // leave room for bottom button
-
-    this.contentContainer = this.add.container(-panelW / 2 + padX, -panelH / 2 + padY);
+    this.contentContainer = this.add.container((w - listW) / 2, 0);
+    this.popup.content.add(this.contentContainer);
 
     // Build content text
     const contentStyle: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -93,7 +49,7 @@ export default class GuideScene extends Phaser.Scene {
       fontStyle: "700",
       fontSize: Math.round(24 * su),
       color: "#3D3D3D",
-      wordWrap: {width: scrollW - 12 * su},
+      wordWrap: {width: listW - 12 * su},
       lineSpacing: 8 * su,
     };
 
@@ -132,123 +88,166 @@ export default class GuideScene extends Phaser.Scene {
     }
     this.contentHeight = cursorY;
 
-    // Create mask for scroll area
-    this.maskGraphics = this.add.graphics({x: -panelW / 2 + padX, y: -panelH / 2 + padY});
-    this.maskGraphics.fillStyle(0x000000, 1);
-    this.maskGraphics.fillRect(0, 0, scrollW, scrollH);
-    const mask = this.maskGraphics.createGeometryMask();
+    // Mask for scroll area (in world coordinates matching the popup content viewport)
+    const viewRect = {
+      x: this.popup.root.x + this.popup.content.x + this.contentContainer.x,
+      y: this.popup.root.y + this.popup.content.y + this.contentContainer.y,
+      w: listW,
+      h: listH,
+    };
+    const maskGfx = this.add.graphics({ x: viewRect.x, y: viewRect.y });
+    maskGfx.fillStyle(0x000000, 1);
+    maskGfx.fillRect(0, 0, viewRect.w, viewRect.h);
+    const mask = maskGfx.createGeometryMask();
     this.contentContainer.setMask(mask);
+    maskGfx.setVisible(false);
 
-    // Scrollbar visuals
+    // Scrollbar visuals (track + thumb) aligned to BasePopup
     this.scrollTrack = this.add.graphics();
     this.scrollThumb = this.add.graphics();
-    this.panel.add([this.scrollTrack, this.scrollThumb]);
 
-    this.scrollAreaHeight = scrollH;
-    this.drawScrollbar(panelW, padX, padY, scrollH);
+    const drawTrack = () => {
+      this.scrollTrack.clear();
+      const trackX = this.popup.root.x + this.popup.width / 2 - 18 * su; // right edge of popup
+      const trackTop = viewRect.y; // align to top of content viewport
+      const trackH = listH;        // span exactly the content viewport height
+      this.scrollTrack.fillStyle(0xD9DDE3, 0.5);
+      this.scrollTrack.fillRoundedRect(trackX, trackTop, 4 * su, trackH, 2 * su);
+    };
+    drawTrack();
 
-    // Close button
-    this.closeBtn = new UiButton(this, w / 2, h / 2 + panelH / 2 - 56 * su, "ĐÓNG", panelW * 0.42, true, true);
-    this.add.existing(this.closeBtn);
-    this.closeBtn.setFontSize(Math.round(18 * su));
-    this.closeBtn.onClick(() => this.stop());
-
-    // Input scrolling
-    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
-
-    const setScroll = (y: number) => {
-      if (this.contentHeight <= this.scrollAreaHeight) return; // no scroll
-      const minY = -(this.contentHeight - this.scrollAreaHeight);
-      this.scrollY = clamp(y, minY, 0);
-      this.contentContainer.y = this.scrollY;
-      this.updateScrollbar();
+    const updateScrollbar = () => {
+      this.scrollThumb.clear();
+      if (this.contentHeight <= this.viewHeight) return;
+      const trackX = this.popup.root.x + this.popup.width / 2 - 18 * su; // right edge of popup
+      const trackTop = viewRect.y; // align to top of content viewport
+      const trackH = listH;        // span exactly the content viewport height
+      const ratio = this.viewHeight / this.contentHeight;
+      const thumbH = Math.max(30 * su, trackH * ratio);
+      const maxScroll = this.contentHeight - this.viewHeight;
+      const progress = maxScroll > 0 ? -this.scrollY / maxScroll : 0;
+      const thumbY = trackTop + (trackH - thumbH) * progress;
+      this.scrollThumb.fillStyle(0xB0B6BE, 0.8);
+      this.scrollThumb.fillRoundedRect(trackX, thumbY, 4 * su, thumbH, 2 * su);
     };
 
+    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+    const setScroll = (y: number) => {
+      if (this.contentHeight <= this.viewHeight) return;
+      const minY = -(this.contentHeight - this.viewHeight);
+      this.scrollY = clamp(y, minY, 0);
+      this.contentContainer.y = this.scrollY;
+      updateScrollbar();
+    };
+
+    // Initial scrollbar state
+    setScroll(0);
+
+    // Restrict wheel and drag to the content viewport only
+    let isOverContent = false;
+    const scrollZone = this.add.zone(
+      viewRect.x + listW / 2,
+      viewRect.y + listH / 2,
+      listW,
+      listH
+    ).setInteractive();
+    scrollZone.on("pointerover", () => { isOverContent = true; });
+    scrollZone.on("pointerout", () => { isOverContent = false; });
+
+    // Wheel scroll only when the mouse pointer is within the content viewport
     this.input.on("wheel", (_p: any, _go: any, _dx: number, dy: number) => {
-      setScroll(this.scrollY - dy * 0.6);
+      const px = this.input.activePointer.x;
+      const py = this.input.activePointer.y;
+      const inside = (px >= viewRect.x && px <= viewRect.x + listW && py >= viewRect.y && py <= viewRect.y + listH);
+      if (!inside) return;
+      setScroll(this.scrollY - dy * 0.5);
     });
 
-    // drag to scroll
+    // Drag to scroll with kinetic momentum (mobile-friendly)
     let dragging = false;
     let startY = 0;
     let startScroll = 0;
-    const dragZone = this.add.zone(w / 2, h / 2, panelW, panelH).setOrigin(0.5).setInteractive();
-    dragZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      dragging = true; startY = pointer.y; startScroll = this.scrollY;
+    let lastY = 0;
+    let lastT = 0;
+    let velocity = 0; // px per ms
+    let momentum: Phaser.Time.TimerEvent | null = null;
+
+    const cancelMomentum = () => {
+      if (momentum) {
+        try { momentum.remove(false); } catch {}
+        momentum = null;
+      }
+    };
+
+    scrollZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      cancelMomentum();
+      dragging = true;
+      startY = pointer.y;
+      startScroll = this.scrollY;
+      lastY = pointer.y;
+      lastT = this.time.now;
+      velocity = 0;
     });
-    this.input.on("pointerup", () => dragging = false);
+
+    this.input.on("pointerup", () => {
+      if (!dragging) return;
+      dragging = false;
+
+      // Start kinetic momentum if velocity is significant
+      let v = Phaser.Math.Clamp(velocity, -2.5, 2.5); // px/ms cap
+      if (Math.abs(v) < 0.01) return;
+      const friction = 0.95; // decay per frame (~60fps)
+      const stepMs = 16; // ms per step
+      const minYBound = -(this.contentHeight - this.viewHeight);
+
+      momentum = this.time.addEvent({
+        delay: stepMs,
+        loop: true,
+        callback: () => {
+          this.scrollY = this.scrollY + v * stepMs;
+          setScroll(this.scrollY);
+
+          // Stop at bounds
+          if ((this.scrollY >= 0 && v > 0) || (this.scrollY <= minYBound && v < 0)) {
+            setScroll(Phaser.Math.Clamp(this.scrollY, minYBound, 0));
+            cancelMomentum();
+            return;
+          }
+
+          // Apply friction
+          v *= friction;
+          if (Math.abs(v) < 0.01) {
+            cancelMomentum();
+          }
+        }
+      });
+    });
+
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (!dragging) return;
+      const now = this.time.now;
       const delta = pointer.y - startY;
       setScroll(startScroll + delta);
+
+      // Update smoothed velocity
+      const dy = pointer.y - lastY;
+      const dt = Math.max(1, now - lastT);
+      const inst = dy / dt; // px per ms
+      // Exponential smoothing to reduce jitter
+      velocity = Phaser.Math.Linear(velocity, inst, 0.35);
+
+      lastY = pointer.y;
+      lastT = now;
     });
 
     // Layout on resize
     this.scale.on("resize", () => this.scene.restart());
   }
 
-  private drawScrollbar(panelW: number, padX: number, padY: number, scrollH: number) {
-    // Draw track on the right inside the panel
-    const x = this.panel.x + panelW / 2 - padX / 2;
-    const y = this.panel.y - (this.panelHeightPx / 2) + padY;
-    this.scrollTrack.clear();
-    this.scrollTrack.fillStyle(0xDADDE2, 1);
-    this.scrollTrack.fillRoundedRect(x - 2, y, 4, scrollH, 2);
-    this.updateScrollbar();
-  }
-
-  private updateScrollbar() {
-    const panel = this.panel;
-    if (!panel) return;
-    const su = scaleUnit();
-
-    const panelWidth = this.panelWidthPx;
-    const panelHeight = this.panelHeightPx;
-    const padX = 24 * su;
-    const padY = 20 * su;
-    const trackX = panel.x + panelWidth / 2 - padX / 2;
-    const trackY = panel.y - panelHeight / 2 + padY;
-    const trackH = this.scrollAreaHeight;
-
-    this.scrollThumb.clear();
-
-    if (this.contentHeight <= this.scrollAreaHeight) {
-      return; // no thumb when not scrollable
-    }
-
-    const visibleRatio = this.scrollAreaHeight / this.contentHeight;
-    const thumbH = Math.max(24 * su, trackH * visibleRatio);
-    const maxThumbY = trackY + trackH - thumbH;
-    const minContentY = -(this.contentHeight - this.scrollAreaHeight);
-    const t = (this.scrollY - 0) / (minContentY - 0); // 0 at top, 1 at bottom
-    const thumbY = Phaser.Math.Linear(trackY, maxThumbY, t);
-
-    this.scrollThumb.fillStyle(0xAEB5C0, 1);
-    this.scrollThumb.fillRoundedRect(trackX - 2, thumbY, 4, thumbH, 2);
-  }
-
   private stop() {
     // Remove listeners and stop scene
     this.input.removeAllListeners();
+    try { this.popup?.destroy(); } catch {}
     this.scene.stop();
   }
-}
-
-// Helpers to get size of container drawing (based on first graphics bounds)
-function widthOf(c: Phaser.GameObjects.Container): number { return boundsOf(c).width; }
-function panelH(c: Phaser.GameObjects.Container): number { return boundsOf(c).height; }
-function boundsOf(c: Phaser.GameObjects.Container): Phaser.Geom.Rectangle {
-  const list = c.list as Phaser.GameObjects.GameObject[];
-  for (const go of list) {
-    if (go instanceof Phaser.GameObjects.Graphics) {
-      // Graphics in some Phaser builds may not expose getBounds(). Guard the call.
-      const anyGo = go as any;
-      if (anyGo && typeof anyGo.getBounds === "function") {
-        const b = anyGo.getBounds();
-        if (b && b.width && b.height) return b as Phaser.Geom.Rectangle;
-      }
-    }
-  }
-  // fallback
-  return new Phaser.Geom.Rectangle(0, 0, 600, 800);
 }

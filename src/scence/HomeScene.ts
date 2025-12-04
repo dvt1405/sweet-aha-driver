@@ -197,7 +197,7 @@ export class HomeScene extends Phaser.Scene {
         this.add.existing(this.levelButton);
 
         // Coin text on the bar
-        this.coinText = this.add.text(0, 0, "$0 XU".toUpperCase(), {
+        this.coinText = this.add.text(0, 0, "0 XU".toUpperCase(), {
             fontFamily: getAppFontFamily(),
             fontStyle: "600",
             fontSize: 50,

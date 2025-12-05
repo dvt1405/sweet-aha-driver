@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {getAppFontFamily, loadAppFont} from "@/utils/fonts";
+import {scaleUnit} from "@/utils/CanvasSize";
 
 /**
  * UiButton - Reusable Phaser button component with an image background and styled text.
@@ -55,12 +56,14 @@ export default class UiButton extends Phaser.GameObjects.Container {
         const fontFamily = getAppFontFamily();
         this.label = scene.add.text(0, 0, (text ?? "").toUpperCase(), {
             fontFamily,
-            fontStyle: "600", // 400 regular
-            fontSize: 50,
+            fontStyle: "700", // 400 regular
+            fontSize: 24 * scaleUnit(),
             color: "#6B7C0E",
             align: "center",
+            lineSpacing: 8 * scaleUnit(),
             stroke: "#FFFFFF", // emulate -webkit-text-stroke: 2px #FFF
-            strokeThickness: 8,
+            strokeThickness: 3 * scaleUnit(),
+            padding: {top: 2 * scaleUnit(), bottom: scaleUnit()},
         }).setOrigin(0.5);
 
         // Shadow: 0 2px 4px rgba(0, 0, 0, 0.10)

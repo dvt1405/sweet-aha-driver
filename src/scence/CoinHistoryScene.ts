@@ -595,47 +595,130 @@ function enableScrollLazy(
     su: number,
     onScroll: (scrollY: number) => void
 ) {
-    let scrollY = 0;
+    let scrollY = 0; // logical clamped scroll
+    let displayY = 0; // actual content.y with possible overscroll
+    let wheelSnapTimer: Phaser.Time.TimerEvent | undefined;
+    let snapTween: Phaser.Tweens.Tween | undefined;
+
     const scrollTrack = scene.add.graphics();
     const scrollThumb = scene.add.graphics();
 
-    const setScroll = (y: number) => {
-        if (contentH <= viewH) return;
-        const minY = -(contentH - viewH);
-        scrollY = Phaser.Math.Clamp(y, minY, 0);
-        content.y = scrollY;
-        updateScrollbar();
-        onScroll(scrollY); // Trigger lazy rendering
+    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+    const minYBound = -(contentH - viewH);
+    const overscrollMax = Math.round(100 * su);
+    const rubberBand = (d: number, max: number, c = 0.55) => {
+        if (d <= 0) return 0;
+        return (1 - 1 / (d * c / max + 1)) * max;
+    };
+
+    const clearWheelTimer = () => {
+        if (wheelSnapTimer) {
+            try { wheelSnapTimer.remove(false); } catch {}
+            wheelSnapTimer = undefined;
+        }
+    };
+    const stopSnapTween = () => {
+        if (snapTween) {
+            try { snapTween.stop(); } catch {}
+            snapTween = undefined;
+        }
     };
 
     const updateScrollbar = () => {
         if (contentH <= viewH) return;
-
         const trackX = popup.root.x + popup.width / 2 - 18 * su;
         const trackTop = popup.root.y - popup.height / 2 + 24 * su;
         const trackH = viewH - 16 * su;
-
         scrollThumb.clear();
-
         const ratio = viewH / contentH;
         const thumbH = Math.max(30 * su, trackH * ratio);
         const maxScroll = contentH - viewH;
         const progress = maxScroll > 0 ? -scrollY / maxScroll : 0;
         const thumbY = trackTop + (trackH - thumbH) * progress;
-
         scrollThumb.fillStyle(0xB0B6BE, 0.8);
         scrollThumb.fillRoundedRect(trackX, thumbY, 4 * su, thumbH, 2 * su);
     };
 
-    // Mouse wheel
+    const setDisplay = (y: number) => {
+        displayY = y;
+        content.y = displayY;
+        const prevLogical = scrollY;
+        scrollY = clamp(displayY, minYBound, 0);
+        if (scrollY !== prevLogical) {
+            onScroll(scrollY);
+        }
+        updateScrollbar();
+    };
+
+    const setScroll = (y: number) => {
+        const clamped = clamp(y, minYBound, 0);
+        setDisplay(clamped);
+    };
+
+    const snapBack = (toY: number) => {
+        stopSnapTween();
+        snapTween = scene.tweens.add({
+            targets: content,
+            y: toY,
+            duration: 260,
+            ease: 'Cubic.Out',
+            onUpdate: () => {
+                displayY = (content.y as number) || 0;
+                scrollY = clamp(displayY, minYBound, 0);
+                onScroll(scrollY);
+                updateScrollbar();
+            },
+            onComplete: () => {
+                displayY = toY;
+                scrollY = clamp(displayY, minYBound, 0);
+                onScroll(scrollY);
+                updateScrollbar();
+                snapTween = undefined;
+            }
+        });
+    };
+
+    const scheduleWheelSnap = (toY: number) => {
+        clearWheelTimer();
+        wheelSnapTimer = scene.time.addEvent({
+            delay: 160,
+            callback: () => snapBack(toY)
+        });
+    };
+
+    // Mouse wheel (allow small overscroll + delayed snap)
     scene.input.on('wheel', (_p: any, _go: any, _dx: number, dy: number) => {
-        setScroll(scrollY - dy * 0.5);
+        stopSnapTween();
+        clearWheelTimer();
+        const wheelOverscrollMax = Math.round(overscrollMax * 0.35);
+        const desired = displayY - dy * 0.5;
+        let disp = desired;
+        if (desired > 0) {
+            disp = 0 + rubberBand(desired - 0, wheelOverscrollMax);
+        } else if (desired < minYBound) {
+            const d = (minYBound - desired);
+            disp = minYBound - rubberBand(d, wheelOverscrollMax);
+        }
+        setDisplay(disp);
+        if (disp > 0) scheduleWheelSnap(0);
+        else if (disp < minYBound) scheduleWheelSnap(minYBound);
     });
 
-    // Touch drag
+    // Touch drag with momentum and overscroll
     let dragging = false;
     let startY = 0;
     let startScroll = 0;
+    let lastY = 0;
+    let lastT = 0;
+    let velocity = 0; // px per ms
+    let momentum: Phaser.Time.TimerEvent | null = null;
+
+    const cancelMomentum = () => {
+        if (momentum) {
+            try { momentum.remove(false); } catch {}
+            momentum = null;
+        }
+    };
 
     const zone = scene.add.zone(
         scene.scale.width / 2,
@@ -645,16 +728,80 @@ function enableScrollLazy(
     ).setInteractive();
 
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+        cancelMomentum();
+        stopSnapTween();
+        clearWheelTimer();
         dragging = true;
         startY = p.y;
         startScroll = scrollY;
+        lastY = p.y;
+        lastT = scene.time.now;
+        velocity = 0;
     });
 
-    scene.input.on('pointerup', () => dragging = false);
+    scene.input.on('pointerup', () => {
+        if (!dragging) return;
+        dragging = false;
+
+        if (displayY > 0) { snapBack(0); return; }
+        if (displayY < minYBound) { snapBack(minYBound); return; }
+
+        // Start kinetic momentum if velocity significant
+        let v = Phaser.Math.Clamp(velocity, -2.5, 2.5);
+        if (Math.abs(v) < 0.01) return;
+        const friction = 0.95;
+        const stepMs = 16;
+
+        momentum = scene.time.addEvent({
+            delay: stepMs,
+            loop: true,
+            callback: () => {
+                const next = displayY + v * stepMs;
+                if (next > 0) {
+                    const d = next - 0;
+                    const disp = 0 + rubberBand(d, overscrollMax * 0.6);
+                    setDisplay(disp);
+                    cancelMomentum();
+                    snapBack(0);
+                    return;
+                } else if (next < minYBound) {
+                    const d = (minYBound - next);
+                    const disp = minYBound - rubberBand(d, overscrollMax * 0.6);
+                    setDisplay(disp);
+                    cancelMomentum();
+                    snapBack(minYBound);
+                    return;
+                } else {
+                    setDisplay(next);
+                }
+                v *= friction;
+                if (Math.abs(v) < 0.01) {
+                    cancelMomentum();
+                }
+            }
+        });
+    });
+
     scene.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-        if (dragging) {
-            setScroll(startScroll + (p.y - startY));
+        if (!dragging) return;
+        const now = scene.time.now;
+        const delta = p.y - startY;
+        const desired = startScroll + delta;
+        let disp = desired;
+        if (desired > 0) {
+            disp = 0 + rubberBand(desired - 0, overscrollMax);
+        } else if (desired < minYBound) {
+            const d = (minYBound - desired);
+            disp = minYBound - rubberBand(d, overscrollMax);
         }
+        setDisplay(disp);
+        // velocity estimate
+        const dy = p.y - lastY;
+        const dt = Math.max(1, now - lastT);
+        const inst = dy / dt;
+        velocity = Phaser.Math.Linear(velocity, inst, 0.35);
+        lastY = p.y;
+        lastT = now;
     });
 }
 

@@ -318,6 +318,48 @@ export async function fetchCoinHistoryItems(): Promise<CoinHistoryListItem[]> {
     }));
 }
 
+export type UpgradeBuddyResponse = {
+    new_level: number;
+    upgrade_cost: number;
+    new_balance: number;
+    is_max_level: boolean;
+};
+
+/**
+ * Upgrade driver buddy level.
+ * PATCH /level
+ */
+export async function upgradeBuddyLevel(): Promise<UpgradeBuddyResponse> {
+    const token = getToken();
+    if (!token) throw new Error('No token');
+    const url = `${API_URL}/level`;
+    const reqInit: RequestInit = {
+        method: 'PATCH',
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    };
+    if (isDebug()) {
+        try {
+            console.log(buildCurl({ method: 'PATCH', url, headers: reqInit.headers as Record<string, string> }));
+        } catch {}
+    }
+    const res = await fetch(url, reqInit);
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new ApiError(res.status, `Upgrade failed: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
+    }
+    const data = await res.json() as UpgradeBuddyResponse;
+    // Update cached profile balance optimistically if returned
+    try {
+        if (_profile && typeof data?.new_balance === 'number') {
+            _profile = { ..._profile, balance: data.new_balance } as DriverBuddyProfile;
+            notify();
+        }
+    } catch {}
+    return data;
+}
+
 export default {
     initFromUrlOrStorage,
     getToken,
@@ -328,4 +370,5 @@ export default {
     claimDailyCheckin,
     fetchCoinTransactions,
     fetchCoinHistoryItems,
+    upgradeBuddyLevel,
 };

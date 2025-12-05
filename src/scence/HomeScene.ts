@@ -10,6 +10,7 @@ import {
     subscribe,
     claimDailyCheckin,
     fetchCoinHistoryItems,
+    upgradeBuddyLevel,
     type DriverBuddyProfile
 } from "@/services/globalApi";
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
@@ -136,6 +137,40 @@ export class HomeScene extends Phaser.Scene {
 
         this.btnUpgrade = new UiButton(this, w * 0.7, h * 0.40, "NÂNG CẤP XE", w * 0.42, false);
         this.add.existing(this.btnUpgrade);
+        // Upgrade handler: call API, refresh profile, then show WelcomeScene
+        this.btnUpgrade.onClick(async () => {
+            try {
+                // Prevent double click
+                this.btnUpgrade.setEnabled(false);
+                // Call upgrade API
+                await upgradeBuddyLevel();
+                // Refresh profile to pick up new level, balance, and buddy image
+                await fetchProfile(true).catch(() => {});
+                // Show welcome scene with the updated data
+                try {
+                    this.scene.start(Scence.Welcome);
+                } catch {}
+            } catch (e: any) {
+                let msg = 'Nâng cấp thất bại. Vui lòng thử lại sau';
+                try {
+                    if (e instanceof ApiError) {
+                        if (e.statusCode === 400) msg = 'Không thể nâng cấp: số dư không đủ hoặc đã đạt tối đa';
+                        else msg = `Lỗi (${e.statusCode}). Vui lòng thử lại`;
+                    } else if (typeof e?.message === 'string') {
+                        msg = e.message;
+                    }
+                } catch {}
+                this.showWarningPopup(msg);
+            } finally {
+                // Re-enable based on latest profile permission
+                try {
+                    const p = getProfile();
+                    this.btnUpgrade.setEnabled(!!p?.can_upgrade);
+                } catch {
+                    this.btnUpgrade.setEnabled(true);
+                }
+            }
+        });
 
         this.btnHistory = new UiButton(this, w * 0.3, h * 0.48, "LỊCH SỬ XU", w * 0.42);
         this.add.existing(this.btnHistory);

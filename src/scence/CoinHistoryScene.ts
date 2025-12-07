@@ -469,7 +469,7 @@ function updatePooledView(
     view.dateText.setPosition(0, titleY + view.titleText.height + 4 * su);
 
     // Update amount
-    const amountStr = `${item.amount >= 0 ? '+' : ''}${formatNumber(item.amount)} xu`;
+    const amountStr = `${item.amount >= 0 ? '+' : '-'}${formatNumber(item.amount)} xu`;
     const amountColor = item.amount >= 0 ? '#F0A400' : '#3D5061';
     console.log(amountStr, amountColor);
     view.amountText.setText(amountStr);

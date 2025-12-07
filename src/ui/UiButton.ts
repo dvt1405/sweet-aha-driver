@@ -101,6 +101,14 @@ export default class UiButton extends Phaser.GameObjects.Container {
 
     /** Set or get enabled state */
     public setEnabled(enabled: boolean) {
+
+        // Update label color per state
+        if (enabled) {
+            this.label.setColor("#6B7C0E");
+        } else {
+            this.label.setColor(this.getDisabledColor());
+        }
+
         if (this._enabled === enabled) return this;
         this._enabled = enabled;
 
@@ -114,13 +122,6 @@ export default class UiButton extends Phaser.GameObjects.Container {
             this.bg.setScale(scale);
         }
         this.updateHitArea();
-
-        // Update label color per state
-        if (enabled) {
-            this.label.setColor("#6B7C0E");
-        } else {
-            this.label.setColor(this.getDisabledColor());
-        }
 
         // Toggle interactivity
         this.updateInteractive();

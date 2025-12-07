@@ -136,6 +136,7 @@ export class HomeScene extends Phaser.Scene {
 
         this.btnUpgrade = new UiButton(this, w * 0.7, h * 0.40, "NÂNG CẤP XE", w * 0.42, false);
         this.add.existing(this.btnUpgrade);
+        this.btnUpgrade.setEnabled(false);
         // Upgrade handler: call API, refresh profile, then show WelcomeScene
         this.btnUpgrade.onClick(async () => {
             try {
@@ -167,9 +168,11 @@ export class HomeScene extends Phaser.Scene {
                 // Re-enable based on latest profile permission
                 try {
                     const p = getProfile();
+                    console.log(`Profile permission: ${p?.can_upgrade}`);
+                    console.log(`Profile permission: ${!!p?.can_upgrade}`);
                     this.btnUpgrade.setEnabled(!!p?.can_upgrade);
                 } catch {
-                    this.btnUpgrade.setEnabled(true);
+                    this.btnUpgrade.setEnabled(false);
                 }
             }
         });

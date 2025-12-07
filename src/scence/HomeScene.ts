@@ -32,24 +32,24 @@ function generateTestCoinHistory(count: number): CoinHistoryItem[] {
         'Bonus cuối tuần',
         'Giao dịch đặc biệt với mô tả rất dài để test word wrap trong title text',
     ];
-    
+
     const now = Date.now();
     for (let i = 0; i < count; i++) {
         const date = new Date(now - i * 3600000); // 1 hour apart
         const dd = String(date.getDate()).padStart(2, '0');
         const mm = String(date.getMonth() + 1).padStart(2, '0');
         const yyyy = date.getFullYear();
-        
+
         const typeIdx = i % types.length;
         const amount = typeIdx === 2 ? -100 - (i % 500) : 10 + (i % 990); // Mix positive and negative
-        
+
         items.push({
             title: types[typeIdx],
             date: `${dd}/${mm}/${yyyy}`,
             amount: amount,
         });
     }
-    
+
     return items;
 }
 
@@ -101,7 +101,6 @@ export class HomeScene extends Phaser.Scene {
         // Background
         this.bg = this.add.image(w / 2, h / 2, "bg_garage").setOrigin(0.5);
         this.coverTo(this.bg, w, h);
-        this.bg.alpha = 0.5;
 
         // Top coin bar and icons
         this.coinBar = this.add.image(w / 2, h * 0.078, "coin_bar").setOrigin(0.5);
@@ -117,9 +116,9 @@ export class HomeScene extends Phaser.Scene {
         // Title (image or text fallback)
         if (this.textures.exists("main_header")) {
             this.titleImage = this.add.image(w / 2, h * 0.19, "main_header").setOrigin(0.5);
-            this.fitWidth(this.titleImage, w * 0.8);
+            this.fitWidth(this.titleImage, w * 0.7);
         } else {
-            this.titleText = this.add.text(w / 2, h * 0.19, "XẾ CÙNG\nAHA", {
+            this.titleText = this.add.text(w / 2, h * 0.19, "XẾ CƯNG\nAHA", {
                 fontFamily: getAppFontFamily(),
                 fontSize: "56px",
                 color: "#ff8b43",
@@ -145,11 +144,13 @@ export class HomeScene extends Phaser.Scene {
                 // Call upgrade API
                 await upgradeBuddyLevel();
                 // Refresh profile to pick up new level, balance, and buddy image
-                await fetchProfile(true).catch(() => {});
+                await fetchProfile(true).catch(() => {
+                });
                 // Show welcome scene with the updated data
                 try {
                     this.scene.start(Scence.Welcome);
-                } catch {}
+                } catch {
+                }
             } catch (e: any) {
                 let msg = 'Nâng cấp thất bại. Vui lòng thử lại sau';
                 try {
@@ -159,7 +160,8 @@ export class HomeScene extends Phaser.Scene {
                     } else if (typeof e?.message === 'string') {
                         msg = e.message;
                     }
-                } catch {}
+                } catch {
+                }
                 this.showWarningPopup(msg);
             } finally {
                 // Re-enable based on latest profile permission
@@ -187,30 +189,30 @@ export class HomeScene extends Phaser.Scene {
         this.btnHistory.onClick(() => {
             // Test mode: Shift key held = generate 1000 test items for performance testing
             const isTestMode = this.input.keyboard && this.input.keyboard.checkDown(this.input.keyboard.addKey('SHIFT'));
-            
+
             if (isTestMode) {
                 console.log('[Test Mode] Generating 1000 test coin history items...');
                 const testItems = generateTestCoinHistory(1000);
-                showCoinHistoryPopup(this, { state: 'list', items: testItems });
+                showCoinHistoryPopup(this, {state: 'list', items: testItems});
             } else {
                 // Show popup immediately with loading state
-                const { popup, updateContent } = showCoinHistoryPopup(this, { state: 'loading' });
-                
+                const {popup, updateContent} = showCoinHistoryPopup(this, {state: 'loading'});
+
                 // Fetch items asynchronously and update popup when ready
                 fetchCoinHistoryItems()
                     .then(items => {
                         if (items && items.length > 0) {
                             // Update to list state with items
-                            updateContent({ state: 'list', items });
+                            updateContent({state: 'list', items});
                         } else {
                             // Update to empty state
-                            updateContent({ state: 'empty' });
+                            updateContent({state: 'empty'});
                         }
                     })
                     .catch((error) => {
                         // Update to error state with error message
                         const errorMsg = error?.message || 'Vui lòng thử lại sau';
-                        updateContent({ state: 'error', errorMessage: errorMsg });
+                        updateContent({state: 'error', errorMessage: errorMsg});
                     });
             }
         });
@@ -259,26 +261,55 @@ export class HomeScene extends Phaser.Scene {
 
             // Title
             if (this.titleImage) {
-                this.titleImage.setPosition(w2 / 2, this.coinIcon.getBottomCenter().y + this.titleImage.height / 2);
-                this.fitWidth(this.titleImage, w2 * 0.8);
+                const y = this.coinBar.getBottomCenter().y + 2 * su + this.titleImage.displayHeight / 2;
+                this.titleImage.setPosition(w2 / 2, y);
             }
             if (this.titleText) {
-                this.titleText.setPosition(w2 / 2, h2 * 0.19);
                 this.titleText.setFontSize(Math.round(h2 * 0.06));
                 this.titleText.setStroke('#0e4370', Math.max(6, Math.floor(w2 * 0.01)));
+                const y = this.coinBar.getBottomCenter().y + 2 * su + this.titleText.height / 2;
+                this.titleText.setPosition(w2 / 2, y);
             }
 
-            // Buttons grid
+            // Buttons grid anchored under title image/text with spacing requirements
             const targetW = w2 * 0.42;
-            const row1Y = h2 * 0.40;
-            const row2Y = h2 * 0.48;
-            const col1X = w2 * 0.30;
-            const col2X = w2 * 0.70;
+            const spacing = 6 * su; // item spacing (both horizontal and vertical)
 
-            this.btnCheckIn.setPosition(col1X, row1Y).setTargetWidth(targetW);
-            this.btnUpgrade.setPosition(col2X, row1Y).setTargetWidth(targetW);
-            this.btnHistory.setPosition(col1X, row2Y).setTargetWidth(targetW);
-            this.btnGuide.setPosition(col2X, row2Y).setTargetWidth(targetW);
+            // Determine the bottom of the title (image preferred, else text)
+            let titleBottom = h2 * 0.19;
+            if (this.titleImage) {
+                titleBottom = this.titleImage.getBottomCenter().y;
+            } else if (this.titleText) {
+                titleBottom = this.titleText.getBottomCenter().y;
+            }
+
+            // Grid top is 16 * su below the title bottom
+            const gridTop = titleBottom + 8 * su;
+
+            // Apply target width first so height is correct for vertical calculations
+            this.btnCheckIn.setTargetWidth(targetW);
+            this.btnUpgrade.setTargetWidth(targetW);
+            this.btnHistory.setTargetWidth(targetW);
+            this.btnGuide.setTargetWidth(targetW);
+
+            // Compute button height after scaling (fallback if not ready)
+            let btnHeight = this.btnCheckIn.height;
+            if (!btnHeight || btnHeight <= 0) btnHeight = 80 * su;
+
+            // Two columns centered horizontally, with spacing between items
+            const totalGridWidth = 2 * targetW + spacing;
+            const col1X = (w2 - totalGridWidth) / 2 + targetW / 2;
+            const col2X = col1X + targetW + spacing;
+
+            // Two rows with vertical spacing
+            const row1Y = gridTop + btnHeight / 2;
+            const row2Y = row1Y + btnHeight + spacing;
+
+            // Position buttons
+            this.btnCheckIn.setPosition(col1X, row1Y);
+            this.btnUpgrade.setPosition(col2X, row1Y);
+            this.btnHistory.setPosition(col1X, row2Y);
+            this.btnGuide.setPosition(col2X, row2Y);
 
             // Bike and bottom button
             this.fitWidth(this.bike, w2 * 0.85);

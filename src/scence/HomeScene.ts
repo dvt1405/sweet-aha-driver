@@ -3,6 +3,7 @@ import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import ClaimPopup from "@/ui/ClaimPopup";
 import {getAppFontFamily} from "@/utils/fonts";
+import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
 import CoinBar from "@/ui/CoinBar";
 import {
@@ -99,6 +100,8 @@ export class HomeScene extends Phaser.Scene {
     }
 
     create() {
+        // Ensure all text in this scene switches to the app font when it finishes loading
+        registerFontAutoRefresh(this);
         const {width: w, height: h} = this.scale;
 
         // Background

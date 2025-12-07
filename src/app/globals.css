@@ -11,14 +11,6 @@
 
 @font-face {
     font-family: 'Baloo Chettan 2';
-    src: url('/fonts/BalooChettan2-Regular.ttf') format('truetype');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Baloo Chettan 2';
     src: url('/fonts/BalooChettan2-Medium.ttf') format('truetype');
     font-weight: 500;
     font-style: normal;
@@ -77,4 +69,32 @@ body {
     background: var(--background);
     color: var(--foreground);
     font-family: "Baloo Chettan 2", "Baloo 2", Baloo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ---- App typography variables & dynamic weight ---- */
+/* Define correct :root variables (the earlier ::root block is a no-op in CSS) */
+:root {
+    /* Global app font family stack used by both DOM and Phaser (via getAppFontFamily) */
+    --app-font-family: "Baloo Chettan 2", "Baloo 2", Baloo, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+
+    /* Weight tokens for convenience */
+    --fw-regular: 400;
+    --fw-medium: 500;
+    --fw-semibold: 600;
+    --fw-bold: 700;
+    --fw-extrabold: 800;
+
+    /* Current weight to apply to body text (can be overridden per scope) */
+    --app-font-weight: var(--fw-regular);
+}
+
+/* Enforce dynamic font family/weight at the document level */
+body {
+    font-family: var(--app-font-family);
+    font-weight: var(--app-font-weight, 400);
+    /* Prevent faux bold/italic so we only use real faces we declared above */
+    font-synthesis-weight: none;
+    font-synthesis-style: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }

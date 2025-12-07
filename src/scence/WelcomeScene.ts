@@ -3,17 +3,17 @@ import Phaser from "phaser";
 import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import {getAppFontFamily, loadAppFont} from "@/utils/fonts";
+import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
-import { initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile } from "@/services/globalApi";
+import CoinBar from "@/ui/CoinBar";
+import {initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile} from "@/services/globalApi";
 
 export class WelcomeScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
-    private coinBar!: Phaser.GameObjects.Image;
-    private coinIcon!: Phaser.GameObjects.Image;
+    private coinBarUi!: CoinBar;
     private shareIcon!: Phaser.GameObjects.Image;
     private titleImage!: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
-    private coinText!: Phaser.GameObjects.Text;
     private congratsText!: Phaser.GameObjects.Text;
     private levelButton!: UiButton;
     private burst!: Phaser.GameObjects.Image;
@@ -83,6 +83,8 @@ export class WelcomeScene extends Phaser.Scene {
     }
 
     create() {
+        // Ensure all text in this scene switches to the app font when it finishes loading
+        registerFontAutoRefresh(this);
         const {width, height} = this.scale;
 
         // Background cover
@@ -90,23 +92,21 @@ export class WelcomeScene extends Phaser.Scene {
         this.coverTo(this.bg, width, height);
         this.bg.alpha = 0.5;
 
-        // Top coin bar
-        this.coinBar = this.add.image(width / 2, height * 0.078, "coin_bar").setOrigin(0.5);
-        this.fitHeight(this.coinBar, height * 0.055); // bar height relative
-
-        // Coin icon overlapping right edge
-        this.coinIcon = this.add.image(0, 0, "coin_icon").setOrigin(0.5);
-        this.fitHeight(this.coinIcon, this.coinBar.displayHeight * 1.2);
+        // Top coin bar (use shared CoinBar component like HomeScene)
+        this.coinBarUi = new CoinBar(this, width / 2, height * 0.078, {});
+        this.add.existing(this.coinBarUi);
+        this.coinBarUi.setBarHeight(height * 0.055);
 
         // Share icon top-right
         this.shareIcon = this.add.image(width - 50, height * 0.078, "share").setOrigin(0.5);
         this.fitHeight(this.shareIcon, height * 0.055);
         this.shareIcon.setInteractive({useHandCursor: true});
 
-        // Title: prefer image, else text
+        // Title: prefer image, else text (match HomeScene sizing/position policy)
         if (this.textures.exists("main_header")) {
             this.titleImage = this.add.image(width / 2, height * 0.19, "main_header").setOrigin(0.5);
-            this.fitWidth(this.titleImage, width * 0.8);
+            // Match HomeScene width ratio
+            this.fitWidth(this.titleImage, width * 0.7);
         } else {
             this.titleText = this.add.text(width / 2, height * 0.19, "XẾ CÙNG\nAHA", {
                 fontFamily: getAppFontFamily(),
@@ -128,7 +128,7 @@ export class WelcomeScene extends Phaser.Scene {
                 align: "center",
                 wordWrap: {width: width * 0.8},
             }
-        ).setOrigin(0.5, 1);
+        ).setOrigin(0.5);
         // Target line-height of 32px with 24px font-size => ~8px extra spacing between lines
         this.congratsText.setLineSpacing(8);
 
@@ -318,53 +318,46 @@ export class WelcomeScene extends Phaser.Scene {
             ease: 'Sine.easeInOut'
         });
 
-        // Make the coin text on bar
-        this.coinText = this.add.text(0, 0, "$0 XU".toUpperCase(), {
-            fontFamily: getAppFontFamily(),
-            fontStyle: "600", // 400 regular
-            fontSize: 50,
-            color: '#9B6F00',
-            align: 'center',
-            stroke: '#FFFFFF',
-            strokeThickness: 8,
-        }).setOrigin(0.5);
-        this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
-
-        // Position coin icon and coin text relative to bar
+        // Layout function for positioning responsive elements
         const layout = () => {
             const {width: w, height: h} = this.scale;
             const _scaleUnit: number = scaleUnit();
             this.coverTo(this.bg, w, h);
 
-            // Top bar elements
-            this.coinBar.setPosition(w / 2, h * 0.078);
-            this.fitHeight(this.coinBar, h * 0.055);
-            this.fitHeight(this.coinIcon, this.coinBar.displayHeight * 1.2);
-            this.coinIcon.setPosition(this.coinBar.x + this.coinBar.width / 2, this.coinBar.y);
-            this.shareIcon.setPosition(w - 50, h * 0.078);
+            // Top bar elements (match HomeScene)
+            this.coinBarUi.setPosition(w / 2, h * 0.078);
+            this.coinBarUi.setBarHeight(h * 0.055);
+            this.shareIcon.setPosition(w - 46 * _scaleUnit, h * 0.078);
             this.fitHeight(this.shareIcon, h * 0.055);
-            this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
-            // Title
+            // Title (match HomeScene: below CoinBar bar bottom with 2*su margin)
+            const barBottom = this.coinBarUi.getBottomCenter().y;
             if (this.titleImage) {
-                this.titleImage.setPosition(w / 2, this.coinIcon.getBottomCenter().y + this.titleImage.height / 2);
-                this.fitWidth(this.titleImage, w * 0.8);
+                const y = barBottom + 2 * _scaleUnit + this.titleImage.displayHeight / 2;
+                this.titleImage.setPosition(w / 2, y);
             }
             if (this.titleText) {
-                this.titleText.setPosition(w / 2, h * 0.19);
                 this.titleText.setFontSize(Math.round(h * 0.06));
                 this.titleText.setStroke('#0e4370', Math.max(6, Math.floor(w * 0.01)));
+                const y = barBottom + 2 * _scaleUnit + this.titleText.height / 2;
+                this.titleText.setPosition(w / 2, y);
             }
 
-            // Congratulations text
-            this.congratsText.setPosition(w / 2, this.titleImage.getBottomCenter().y + this.congratsText.height / 2);
+            // Congratulations text: 50*su margin below main_header bottom
+            let titleBottom = barBottom;
+            if (this.titleImage) titleBottom = this.titleImage.getBottomCenter().y;
+            else if (this.titleText) titleBottom = this.titleText.getBottomCenter().y;
+            const congratsY = titleBottom + 50 * _scaleUnit + this.congratsText.height / 2;
+            this.congratsText.setPosition(w / 2, congratsY);
             this.congratsText.setWordWrapWidth(w * 0.8);
 
-            // Level button
-            this.levelButton.setPosition(w / 2, h * 0.5);
-            this.levelButton.setTargetWidth(w * 0.33);
+            // Level button: align with bottom of congratsText (top of button touches congrats bottom)
+            const levelBtnWidth = w * 0.3;
+            this.levelButton.setTargetWidth(levelBtnWidth);
             this.levelButton.height = 32 * _scaleUnit;
-            this.levelButton.setFontSize(16 * _scaleUnit)
+            this.levelButton.setFontSize(16 * _scaleUnit);
+            const congratsBottom = this.congratsText.getBottomCenter().y;
+            this.levelButton.setPosition(w / 2, congratsBottom + this.levelButton.height / 2)
 
             // Burst and bike
             this.fitWidth(this.burst, w * 0.95);
@@ -429,9 +422,7 @@ export class WelcomeScene extends Phaser.Scene {
         const token = initFromUrlOrStorage();
         const applyProfile = (p: DriverBuddyProfile | null) => {
             const balance = Math.max(0, Math.floor(p?.balance ?? 0));
-            if (this.coinText) {
-                this.coinText.setText(`${balance} XU`.toUpperCase());
-            }
+            this.coinBarUi?.setValue(`${balance} XU`);
         };
         // Subscribe to global profile changes
         this.unsubscribeProfile = subscribe((p) => {
@@ -451,7 +442,8 @@ export class WelcomeScene extends Phaser.Scene {
         });
         // Fetch latest profile if token exists
         if (token) {
-            fetchProfile().then(applyProfile).catch(() => {});
+            fetchProfile().then(applyProfile).catch(() => {
+            });
         }
     }
 

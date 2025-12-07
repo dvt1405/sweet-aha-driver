@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import BasePopup from "@/ui/BasePopup";
 import {getAppFontFamily} from "@/utils/fonts";
+import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
 
 /**
@@ -25,6 +26,8 @@ export default class GuideScene extends Phaser.Scene {
     }
 
     create() {
+        // Ensure all text in this scene switches to the app font when it finishes loading
+        registerFontAutoRefresh(this);
         const {width: w, height: h} = this.scale;
         const su = scaleUnit();
 

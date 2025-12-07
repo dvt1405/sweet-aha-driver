@@ -265,7 +265,7 @@ export class HomeScene extends Phaser.Scene {
 
             // Buttons grid anchored under title image/text with spacing requirements
             const targetW = w2 * 0.42;
-            const spacing = 6 * su; // item spacing (both horizontal and vertical)
+            const spacing = 4 * su; // item spacing (both horizontal and vertical)
 
             // Determine the bottom of the title (image preferred, else text)
             let titleBottom = h2 * 0.19;
@@ -305,13 +305,14 @@ export class HomeScene extends Phaser.Scene {
 
             // Bike and bottom button
             this.fitWidth(this.bike, w2 * 0.85);
-            const bottomY = h2 - 72 * su;
+            const levelBtnHeight = 156.0 / 32 * su;
+            const bottomY = h2 - 56 * su;
             this.levelButton.setPosition(w2 / 2, bottomY);
             this.levelButton.setTargetWidth(w2 * 0.3);
-            this.levelButton.height = 32 * su;
+            this.levelButton.height = levelBtnHeight;
             this.levelButton.setFontSize(16 * su);
 
-            const bikeY = bottomY - this.levelButton.height - this.bike.height / 2 - 12 * su;
+            const bikeY = bottomY - this.levelButton.height / 2 - this.bike.height / 2 - 56 * su;
             this.bike.setPosition(w2 / 2, bikeY);
         };
 
@@ -370,6 +371,9 @@ export class HomeScene extends Phaser.Scene {
             // Enable/disable upgrade per can_upgrade
             const canUpgrade = !!data?.can_upgrade;
             this.btnUpgrade?.setEnabled(canUpgrade);
+            this.btnHistory?.setEnabled(true);
+            this.btnGuide?.setEnabled(true);
+            this.updateCheckinButtonState()
 
             // Update bike image to buddy.img_url if available
             const imgUrl: string | undefined = data?.buddy?.img_url;
@@ -439,8 +443,6 @@ export class HomeScene extends Phaser.Scene {
     }
 
     private updateCheckinButtonState() {
-        this.btnCheckIn?.setEnabled(true);
-        return
         try {
             const disabled = this.hasCheckedInToday();
             this.btnCheckIn?.setEnabled(!disabled);

@@ -109,7 +109,7 @@ export default class CoinBar extends Phaser.GameObjects.Container {
     // Icon: height = 1.2 * bar height (default ~44*su) and placed at the right edge center
     const iconH = h * 1.2;
     this.icon.setDisplaySize(iconH, iconH);
-    this.icon.setPosition(w / 2, 0);
+    this.icon.setPosition(w / 2 - iconH / 2, 0);
 
     // Update container size to the bar bounds
     this.setSize(w, h);

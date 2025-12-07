@@ -69,7 +69,6 @@ export default class UiButton extends Phaser.GameObjects.Container {
         // Shadow: 0 2px 4px rgba(0, 0, 0, 0.10)
         this.label.setShadow(0, 2, "rgba(0,0,0,0.10)", 4, true, true);
         // Letter spacing (if supported by current Phaser version)
-        // @ts-ignore - setLetterSpacing may not exist in some Phaser versions
         this.label.setLetterSpacing?.(-0.32);
 
         // Add children to container

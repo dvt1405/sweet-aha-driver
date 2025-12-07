@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
+import ClaimPopup from "@/ui/ClaimPopup";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
 import {
@@ -88,7 +89,10 @@ export class HomeScene extends Phaser.Scene {
         this.load.image("bg_progress_active", "/bg_progress_active.png");
         this.load.image("main_header", "/main_header.png");
         this.load.image("bike", "/ic_bike.png");
-        // Popup overlay image for claim success
+        // Effects and popup resources
+        this.load.image("burst", "/burst.png");
+        this.load.image("congrats_text_bg", "/bg_main_congartulation_text.png");
+        // Legacy overlay (kept for compatibility, not used now)
         this.load.image("overlay_popup", "/overlay_popup.png");
         // Popup warning background for already-claimed case (HTTP 404)
         this.load.image("bg_popup_warning", "/bg_popup_warning.png");
@@ -239,12 +243,12 @@ export class HomeScene extends Phaser.Scene {
         // Coin text on the bar
         this.coinText = this.add.text(0, 0, "0 XU".toUpperCase(), {
             fontFamily: getAppFontFamily(),
-            fontStyle: "600",
-            fontSize: 50,
+            fontStyle: "800",
+            fontSize: 18 * scaleUnit(),
             color: "#9B6F00",
             align: "center",
             stroke: "#FFFFFF",
-            strokeThickness: 8,
+            strokeThickness: 2 * scaleUnit(),
         }).setOrigin(0.5);
 
         const layout = () => {
@@ -258,7 +262,7 @@ export class HomeScene extends Phaser.Scene {
             this.fitHeight(this.coinBar, h2 * 0.055);
             this.fitHeight(this.coinIcon, this.coinBar.displayHeight * 1.2);
             this.coinIcon.setPosition(this.coinBar.x + this.coinBar.width / 2, this.coinBar.y);
-            this.shareIcon.setPosition(w2 - 50, h2 * 0.078);
+            this.shareIcon.setPosition(w2 - 46 * su, h2 * 0.078);
             this.fitHeight(this.shareIcon, h2 * 0.055);
             this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
@@ -448,6 +452,8 @@ export class HomeScene extends Phaser.Scene {
     }
 
     private updateCheckinButtonState() {
+        this.btnCheckIn?.setEnabled(true);
+        return
         try {
             const disabled = this.hasCheckedInToday();
             this.btnCheckIn?.setEnabled(!disabled);
@@ -456,51 +462,8 @@ export class HomeScene extends Phaser.Scene {
     }
 
     private showClaimPopup(amount: number) {
-        const {width: w, height: h} = this.scale;
-        // Dark backdrop
-        const backdrop = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
-            .setInteractive({useHandCursor: false});
-
-        // Popup image centered
-        const popup = this.add.image(w / 2, h / 2, 'overlay_popup').setOrigin(0.5);
-        const targetW = Math.min(w * 0.8, 340);
-        this.fitWidth(popup as any, targetW);
-
-        // Amount text displayed roughly at the yellow bar center in image
-        const amountText = this.add.text(w / 2, 0, `${amount} XU`, {
-            fontFamily: getAppFontFamily(),
-            fontStyle: '800',
-            fontSize: 44,
-            color: '#FFFFFF',
-            align: 'center',
-            stroke: '#3F5F00',
-            strokeThickness: 10,
-        }).setOrigin(0.5);
-
-        // Position amount text at approximate bar Y (tuned for provided image)
-        const popupBarOffsetY = popup.displayHeight * 0.04; // small tweak
-        amountText.setPosition(w / 2, popup.y + popupBarOffsetY);
-
-        // Close button at bottom
-        const closeBtn = new UiButton(this, w / 2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
-        this.add.existing(closeBtn);
-        closeBtn.onClick(() => close());
-
-        // Auto close on backdrop click
-        backdrop.on('pointerdown', () => close());
-
-        // Bring to top layering
-        this.children.bringToTop(backdrop);
-        this.children.bringToTop(popup);
-        this.children.bringToTop(amountText);
-        this.children.bringToTop(closeBtn);
-
-        const close = () => {
-            backdrop.destroy();
-            popup.destroy();
-            amountText.destroy();
-            closeBtn.destroy();
-        };
+        // Use reusable ClaimPopup built from existing UI elements
+        new ClaimPopup(this, amount);
     }
 
     private showWarningPopup(message: string) {

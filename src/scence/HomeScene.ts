@@ -4,6 +4,7 @@ import UiButton from "@/ui/UiButton";
 import ClaimPopup from "@/ui/ClaimPopup";
 import {getAppFontFamily} from "@/utils/fonts";
 import {scaleUnit} from "@/utils/CanvasSize";
+import CoinBar from "@/ui/CoinBar";
 import {
     initFromUrlOrStorage,
     fetchProfile,
@@ -12,7 +13,7 @@ import {
     claimDailyCheckin,
     fetchCoinHistoryItems,
     upgradeBuddyLevel,
-    type DriverBuddyProfile
+    type DriverBuddyProfile, getToken
 } from "@/services/globalApi";
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
 import {is} from "@babel/types";
@@ -58,12 +59,10 @@ export class HomeScene extends Phaser.Scene {
     private claiming = false;
     private static CHECKIN_KEY = 'aha_daily_checkin_date';
     private bg!: Phaser.GameObjects.Image;
-    private coinBar!: Phaser.GameObjects.Image;
-    private coinIcon!: Phaser.GameObjects.Image;
+    private coinBarUi!: CoinBar;
     private shareIcon!: Phaser.GameObjects.Image;
     private titleImage?: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
-    private coinText!: Phaser.GameObjects.Text;
 
     private btnCheckIn!: UiButton;
     private btnUpgrade!: UiButton;
@@ -107,11 +106,9 @@ export class HomeScene extends Phaser.Scene {
         this.coverTo(this.bg, w, h);
 
         // Top coin bar and icons
-        this.coinBar = this.add.image(w / 2, h * 0.078, "coin_bar").setOrigin(0.5);
-        this.fitHeight(this.coinBar, h * 0.055);
-
-        this.coinIcon = this.add.image(0, 0, "coin_icon").setOrigin(0.5);
-        this.fitHeight(this.coinIcon, this.coinBar.displayHeight * 1.2);
+        this.coinBarUi = new CoinBar(this, w / 2, h * 0.078, {});
+        this.add.existing(this.coinBarUi);
+        this.coinBarUi.setBarHeight(h * 0.055);
 
         this.shareIcon = this.add.image(w - 50, h * 0.078, "share").setOrigin(0.5);
         this.fitHeight(this.shareIcon, h * 0.055);
@@ -240,16 +237,7 @@ export class HomeScene extends Phaser.Scene {
         this.levelButton = new UiButton(this, w / 2, h - 96 * scaleUnit(), "CẤP ĐỘ 1", w * 0.5, true, true);
         this.add.existing(this.levelButton);
 
-        // Coin text on the bar
-        this.coinText = this.add.text(0, 0, "0 XU".toUpperCase(), {
-            fontFamily: getAppFontFamily(),
-            fontStyle: "800",
-            fontSize: 18 * scaleUnit(),
-            color: "#9B6F00",
-            align: "center",
-            stroke: "#FFFFFF",
-            strokeThickness: 2 * scaleUnit(),
-        }).setOrigin(0.5);
+        // Coin text is part of CoinBar component; initial value is set by default
 
         const layout = () => {
             const {width: w2, height: h2} = this.scale;
@@ -258,23 +246,20 @@ export class HomeScene extends Phaser.Scene {
             this.coverTo(this.bg, w2, h2);
 
             // Top bar
-            this.coinBar.setPosition(w2 / 2, h2 * 0.078);
-            this.fitHeight(this.coinBar, h2 * 0.055);
-            this.fitHeight(this.coinIcon, this.coinBar.displayHeight * 1.2);
-            this.coinIcon.setPosition(this.coinBar.x + this.coinBar.width / 2, this.coinBar.y);
+            this.coinBarUi.setPosition(w2 / 2, h2 * 0.078);
+            this.coinBarUi.setBarHeight(h2 * 0.055);
             this.shareIcon.setPosition(w2 - 46 * su, h2 * 0.078);
             this.fitHeight(this.shareIcon, h2 * 0.055);
-            this.coinText.setPosition(this.coinBar.x, this.coinBar.y);
 
             // Title
             if (this.titleImage) {
-                const y = this.coinBar.getBottomCenter().y + 2 * su + this.titleImage.displayHeight / 2;
+                const y = this.coinBarUi.getBottomCenter().y + 2 * su + this.titleImage.displayHeight / 2;
                 this.titleImage.setPosition(w2 / 2, y);
             }
             if (this.titleText) {
                 this.titleText.setFontSize(Math.round(h2 * 0.06));
                 this.titleText.setStroke('#0e4370', Math.max(6, Math.floor(w2 * 0.01)));
-                const y = this.coinBar.getBottomCenter().y + 2 * su + this.titleText.height / 2;
+                const y = this.coinBarUi.getBottomCenter().y + 2 * su + this.titleText.height / 2;
                 this.titleText.setPosition(w2 / 2, y);
             }
 
@@ -380,9 +365,7 @@ export class HomeScene extends Phaser.Scene {
 
             // Update coin text "$balance XU"
             const balance = Math.max(0, Math.floor(data?.balance ?? 0));
-            if (this.coinText) {
-                this.coinText.setText(`${balance} XU`.toUpperCase());
-            }
+            this.coinBarUi?.setValue(`${balance} XU`);
 
             // Enable/disable upgrade per can_upgrade
             const canUpgrade = !!data?.can_upgrade;
@@ -398,6 +381,10 @@ export class HomeScene extends Phaser.Scene {
     }
 
     private async handleDailyCheckin() {
+        if (!getToken() || getToken()?.length == 0) {
+            this.showWarningPopup('Missing Auth Token!');
+            return;
+        }
         if (this.claiming) return;
         this.claiming = true;
         try {
@@ -468,27 +455,28 @@ export class HomeScene extends Phaser.Scene {
 
     private showWarningPopup(message: string) {
         const {width: w, height: h} = this.scale;
-        const backdrop = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.55)
+        const backdrop = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.85)
             .setInteractive({useHandCursor: false});
 
         const popup = this.add.image(w / 2, h / 2, 'bg_popup_warning').setOrigin(0.5);
-        const targetW = Math.min(w * 0.86, 420);
+        const targetW = Math.min(w * 0.86, w - 32 * scaleUnit());
         this.fitWidth(popup as any, targetW);
 
         // Centered message text in the yellow area
         const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
             fontFamily: getAppFontFamily(),
             fontStyle: '700',
-            fontSize: 28,
-            color: '#6B4B00',
+            fontSize: 16 * scaleUnit(),
+            color: '#FFFFFF',
             align: 'center',
             wordWrap: {width: targetW * 0.76},
         };
         const msg = this.add.text(w / 2, popup.y + popup.displayHeight * 0.12, message, textStyle)
             .setOrigin(0.5);
 
-        const closeBtn = new UiButton(this, w / 2, h - 96 * scaleUnit(), 'ĐÓNG', w * 0.33);
+        const closeBtn = new UiButton(this, w / 2, popup.y + popup.displayHeight / 2, 'ĐÓNG', w * 0.33);
         this.add.existing(closeBtn);
+        closeBtn.setPosition(w / 2, popup.y + popup.displayHeight / 2 - 16 * scaleUnit());
         closeBtn.onClick(() => close());
 
         backdrop.on('pointerdown', () => close());

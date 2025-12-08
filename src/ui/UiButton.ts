@@ -48,7 +48,12 @@ export default class UiButton extends Phaser.GameObjects.Container {
         this.bg = scene.add.image(0, 0, bgKey)
             .setInteractive({useHandCursor: true})
             .on("pointerdown", () => {
-                if (this._enabled) this._onClick();
+                if (this._enabled) {
+                    this.tweenScale(
+                        0.97,
+                        this._onClick
+                    );
+                }
             })
             .setOrigin(0.5);
 
@@ -207,12 +212,16 @@ export default class UiButton extends Phaser.GameObjects.Container {
         }
     }
 
-    private tweenScale(to: number) {
+    private tweenScale(to: number,
+                       onComplete?: () => void) {
         this.scene.tweens.add({
             targets: this,
             scale: to,
             duration: 100,
             ease: "Quad.easeOut",
+            onComplete: () => {
+                onComplete?.call(this);
+            }
         });
     }
 

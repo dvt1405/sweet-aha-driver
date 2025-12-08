@@ -40,8 +40,9 @@ export function showCoinHistoryPopup(
         closeButtonText: "ĐÓNG",
     });
 
-    const listW = popup.content.width * 0.9 - 24 * su; // Account for BasePopup's internal padding
-    const listH = popup.contentHeight;
+    const scrollbarSpace = 24 * su; // Reserve space for scrollbar
+    const listW = popup.content.width * 0.9 - 24 * su - scrollbarSpace; // Account for BasePopup's internal padding and scrollbar
+    const listH = popup.content.height;
 
     // Content container for list/empty/loading/error state
     const content = scene.add.container((w - listW)/2, 0);
@@ -322,7 +323,7 @@ function calculateItemLayouts(
 ): ItemLayout[] {
     const itemSpacing = 8 * su;
     const amountReservedSpace = 150 * su;
-    const titleMaxWidth = w;
+    const titleMaxWidth = w - amountReservedSpace - 12 * su; // Reserve space for amount column
     const layouts: ItemLayout[] = [];
     let y = 0;
 
@@ -360,8 +361,9 @@ function calculateItemLayouts(
         tempDate.setText(item.date);
         const dateH = tempDate.height;
 
-        // Calculate total row height
-        const rowHeight = 12 * su + titleH + 4 * su + dateH + itemSpacing;
+        // Calculate total row height with proper bottom padding
+        // 12*su top padding + title + 4*su spacing + date + 12*su bottom padding + 8*su item spacing
+        const rowHeight = 12 * su + titleH + 4 * su + dateH + 12 * su + itemSpacing;
 
         layouts.push({
             index: i,
@@ -390,8 +392,8 @@ function createItemPool(
 ): PooledItemView[] {
     const pool: PooledItemView[] = [];
     const amountReservedSpace = 150 * su;
-    const titleMaxWidth = w - 12 * su;
-    const amountRightPadding = 0; // Add right padding to prevent clipping
+    const amountRightPadding = 8 * su; // Add right padding to prevent clipping
+    const titleMaxWidth = w - amountReservedSpace - 12 * su; // Reserve space for amount column
 
     for (let i = 0; i < poolSize; i++) {
         const container = scene.add.container(0, 0);
@@ -414,14 +416,13 @@ function createItemPool(
             color: '#8B8B8B',
         }).setOrigin(0, 0);
 
-        const amountText = scene.add.text(w, 0, '', {
+        const amountText = scene.add.text(w - amountRightPadding, 0, '', {
             fontFamily: getAppFontFamily(),
             fontStyle: '800',
             fontSize: Math.round(20 * su),
             color: '#F0A400',
             align: 'right',
         }).setOrigin(1, 0);
-        amountText.setPosition()
         container.add([separator, titleText, dateText, amountText]);
         container.setVisible(false);
 
@@ -498,7 +499,7 @@ function createList(
 
     // Create item pool (visible items + buffer)
     const bufferSize = 5; // render 5 extra items above and below viewport
-    const maxVisibleItems = Math.ceil(viewH / (60 * su)) + bufferSize * 2; // estimate ~60*su per item
+    const maxVisibleItems = Math.ceil(viewH / (40 * su)) + bufferSize * 2; // estimate ~60*su per item
     const poolSize = Math.min(maxVisibleItems, items.length);
     const pool = createItemPool(scene, poolSize, w, su);
 
@@ -691,7 +692,7 @@ function enableScrollLazy(
         stopSnapTween();
         clearWheelTimer();
         const wheelOverscrollMax = Math.round(overscrollMax * 0.35);
-        const desired = displayY - dy * 0.5;
+        const desired = displayY - dy * 1.2; // Increased from 0.5 for smoother/faster scrolling
         let disp = desired;
         if (desired > 0) {
             disp = 0 + rubberBand(desired - 0, wheelOverscrollMax);
@@ -721,11 +722,12 @@ function enableScrollLazy(
     };
 
     const zone = scene.add.zone(
-        scene.scale.width / 2,
-        scene.scale.height / 2,
-        scene.scale.width,
-        scene.scale.height
+        w / 2,
+        viewH / 2,
+        w,
+        viewH
     ).setInteractive();
+    popup.content.add(zone);
 
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
         cancelMomentum();
@@ -747,9 +749,9 @@ function enableScrollLazy(
         if (displayY < minYBound) { snapBack(minYBound); return; }
 
         // Start kinetic momentum if velocity significant
-        let v = Phaser.Math.Clamp(velocity, -2.5, 2.5);
+        let v = Phaser.Math.Clamp(velocity, -4.0, 4.0); // Increased from 2.5 for better momentum
         if (Math.abs(v) < 0.01) return;
-        const friction = 0.95;
+        const friction = 0.92; // Reduced from 0.95 for more natural deceleration
         const stepMs = 16;
 
         momentum = scene.time.addEvent({
@@ -799,7 +801,7 @@ function enableScrollLazy(
         const dy = p.y - lastY;
         const dt = Math.max(1, now - lastT);
         const inst = dy / dt;
-        velocity = Phaser.Math.Linear(velocity, inst, 0.35);
+        velocity = Phaser.Math.Linear(velocity, inst, 0.5); // Increased from 0.35 for more responsive tracking
         lastY = p.y;
         lastT = now;
     });

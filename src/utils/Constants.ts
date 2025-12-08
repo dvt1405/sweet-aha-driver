@@ -6,5 +6,5 @@ export enum Scence {
     Bike = "BikeScene",
     Home = "HomeScene",
     Guide = "GuideScene",
-    CoinHistory = "CoinHistoryScene",
+    LEVEL_PREVIEW = "LevelPreviewScene",
 }

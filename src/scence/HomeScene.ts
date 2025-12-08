@@ -19,6 +19,7 @@ import {
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
 import {is} from "@babel/types";
 import {ApiError} from "next/dist/server/api-utils";
+import {type LevelPreviewItem} from "@/scence/LevelPreviewScene";
 
 /**
  * Generate test coin history data for performance testing
@@ -235,6 +236,44 @@ export class HomeScene extends Phaser.Scene {
             repeat: -1,
             ease: "Sine.easeInOut",
         });
+
+        // Tap bike to show level preview slider (current + next level)
+        this.bike.setInteractive({useHandCursor: true})
+            .on('pointerdown', () => {
+                try {
+                    const p = getProfile();
+                    const items: LevelPreviewItem[] = [];
+                    // Current level slide
+                    const cur = p?.buddy ?? {};
+                    items.push({
+                        level: cur.level ?? 1,
+                        model_name: cur.model_name,
+                        img_url: cur.img_url,
+                        // no upgrade_cost for current level
+                    });
+                    // Next level slide (if available)
+                    const next = p?.next_level_buddy ?? undefined;
+                    if (next) {
+                        items.push({
+                            level: next.level,
+                            model_name: next.model_name,
+                            upgrade_cost: next.upgrade_cost,
+                            img_url: next.img_url,
+                        });
+                    }
+                    // If we still have only one item, duplicate to allow swipe UX
+                    const finalItems = items.length > 0 ? items : [{
+                        level: 1,
+                    }];
+
+                    this.scene.start(Scence.LEVEL_PREVIEW, {
+                        items: finalItems,
+                        startIndex: 0,
+                        previousScene: Scence.Home
+                    });
+                } catch {
+                }
+            });
 
         // Bottom progress button
         this.levelButton = new UiButton(this, w / 2, h - 96 * scaleUnit(), "CẤP ĐỘ 1", w * 0.5, true, true);

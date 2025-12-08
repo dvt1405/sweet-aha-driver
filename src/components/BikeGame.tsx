@@ -9,6 +9,7 @@ import BikeScene from "@/scence/BikeScene";
 import {HomeScene} from "@/scence/HomeScene";
 import GuideScene from "@/scence/GuideScene";
 import BootScene from "@/scence/BootScene";
+import LevelPreviewScene from "@/scence/LevelPreviewScene";
 
 export default function BikeGame() {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,7 +33,7 @@ export default function BikeGame() {
             width: 1080,
             height: 1920,
             backgroundColor: "#000000",
-            scene: [BootScene, WelcomeScene, HomeScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene, GuideScene],
+            scene: [BootScene, WelcomeScene, HomeScene, LevelPreviewScene, BackgroundGarageScene, BackgroundScrollScene, BikeScene, GuideScene],
             physics: {default: "arcade"},
             scale: {
                 mode: Phaser.Scale.FIT,

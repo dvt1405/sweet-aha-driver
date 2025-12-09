@@ -26,11 +26,50 @@ export type DriverBuddyProfile = {
 const API_URL = 'https://apistg.ahamove.com/api/v3/private/driver-buddy';
 const TOKEN_KEY = 'auth_token';
 const DEBUG_KEY = 'debug_mode';
+const PROFILE_STORAGE_KEY = 'cached_profile';
 
 let _token: string | null = null;
 let _profile: DriverBuddyProfile = null;
 let _debug: boolean | undefined = undefined;
+let _lastFetchTime: number = 0; // timestamp of last profile fetch
+const PROFILE_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
 const listeners = new Set<(p: DriverBuddyProfile) => void>();
+
+/**
+ * Save profile to localStorage for offline/error fallback
+ */
+function saveProfileToStorage(profile: DriverBuddyProfile) {
+    if (!isBrowser() || !profile) return;
+    try {
+        localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    } catch {
+    }
+}
+
+/**
+ * Load profile from localStorage
+ */
+function loadProfileFromStorage(): DriverBuddyProfile {
+    if (!isBrowser()) return null;
+    try {
+        const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+        if (saved) {
+            return JSON.parse(saved) as DriverBuddyProfile;
+        }
+    } catch {
+    }
+    return null;
+}
+
+/**
+ * Get cached profile from localStorage (for use before API call or on error)
+ */
+export function getCachedProfile(): DriverBuddyProfile {
+    // First check in-memory cache
+    if (_profile) return _profile;
+    // Then check localStorage
+    return loadProfileFromStorage();
+}
 
 const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
 
@@ -183,7 +222,23 @@ export async function fetchProfile(force = false): Promise<DriverBuddyProfile> {
     const res = await fetch(API_URL, reqInit);
     if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
     _profile = await res.json();
+    _lastFetchTime = Date.now();
+    // Save to localStorage for offline/error fallback
+    saveProfileToStorage(_profile);
     notify();
+    return _profile;
+}
+
+/**
+ * Fetch profile only if cache is stale (older than 5 minutes).
+ * Returns cached profile if still fresh, otherwise fetches new data.
+ */
+export async function fetchProfileIfStale(): Promise<DriverBuddyProfile> {
+    const now = Date.now();
+    const isStale = !_profile || (now - _lastFetchTime) > PROFILE_CACHE_DURATION_MS;
+    if (isStale) {
+        return fetchProfile(true);
+    }
     return _profile;
 }
 
@@ -365,6 +420,7 @@ export default {
     getToken,
     setToken,
     fetchProfile,
+    fetchProfileIfStale,
     getProfile,
     subscribe,
     claimDailyCheckin,

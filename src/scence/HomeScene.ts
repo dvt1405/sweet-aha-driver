@@ -10,6 +10,7 @@ import {
     initFromUrlOrStorage,
     fetchProfile,
     getProfile,
+    getCachedProfile,
     subscribe,
     claimDailyCheckin,
     fetchCoinHistoryItems,
@@ -74,6 +75,8 @@ export class HomeScene extends Phaser.Scene {
     private bike!: Phaser.GameObjects.Image;
     private levelButton!: UiButton;
     private unsubscribeProfile?: () => void;
+    private loadingSpinner?: Phaser.GameObjects.Arc;
+    private loadingTween?: Phaser.Tweens.Tween;
 
     constructor() {
         super(Scence.Home);
@@ -98,6 +101,10 @@ export class HomeScene extends Phaser.Scene {
         // Popup warning background for already-claimed case (HTTP 404)
         this.load.image("bg_popup_warning", "/bg_popup_warning.png");
         this.load.image("popup_header", "/bg_btn_header_popup.png")
+        // Default level images for fallback when external image fails to load
+        for (let i = 1; i <= 10; i++) {
+            this.load.image(`lv${i}`, `/lv${i}.png`);
+        }
     }
 
     create() {
@@ -228,6 +235,13 @@ export class HomeScene extends Phaser.Scene {
         // Bike image
         this.bike = this.add.image(w / 2, h * 0.78, "bike").setOrigin(0.5);
         this.fitWidth(this.bike, w * 0.85);
+
+        // Loading spinner (positioned at bike location, hidden by default)
+        this.loadingSpinner = this.add.arc(w / 2, h * 0.78, 40 * scaleUnit(), 0, 270, false, 0xff8b43);
+        this.loadingSpinner.setStrokeStyle(6 * scaleUnit(), 0xff8b43);
+        this.loadingSpinner.setClosePath(false);
+        this.loadingSpinner.setVisible(false);
+
         this.tweens.add({
             targets: this.bike,
             angle: {from: -3, to: 3},
@@ -356,6 +370,11 @@ export class HomeScene extends Phaser.Scene {
 
             const bikeY = bottomY - this.levelButton.height / 2 - this.bike.height / 2 - 56 * su;
             this.bike.setPosition(w2 / 2, bikeY);
+
+            // Update loading spinner position to match bike
+            if (this.loadingSpinner) {
+                this.loadingSpinner.setPosition(w2 / 2, bikeY);
+            }
         };
 
         layout();
@@ -373,8 +392,8 @@ export class HomeScene extends Phaser.Scene {
                 });
             }
         });
-        // Apply cached profile immediately if available
-        const cached = getProfile();
+        // Apply cached profile immediately if available (from localStorage)
+        const cached = getCachedProfile();
         if (cached) {
             this.applyProfile(cached).catch(() => {
             });
@@ -389,8 +408,22 @@ export class HomeScene extends Phaser.Scene {
             this.unsubscribeProfile = undefined;
         });
         if (token) {
-            fetchProfile().then(p => this.applyProfile(p)).catch(() => {
-            });
+            // Show loading while fetching profile and bike image
+            this.showLoading();
+            (async () => {
+                try {
+                    const p = await fetchProfile();
+                    await this.applyProfile(p);
+                } catch {
+                    // On API error, fall back to cached profile
+                    const fallback = getCachedProfile();
+                    if (fallback) {
+                        await this.applyProfile(fallback);
+                    }
+                } finally {
+                    this.hideLoading();
+                }
+            })();
         } else {
             // keep defaults if no token
         }
@@ -420,7 +453,7 @@ export class HomeScene extends Phaser.Scene {
             // Update bike image to buddy.img_url if available
             const imgUrl: string | undefined = data?.buddy?.img_url;
             if (imgUrl && typeof imgUrl === 'string') {
-                await this.loadExternalImageAndApply('buddy_bike', imgUrl, this.bike);
+                await this.loadExternalImageAndApply('buddy_bike', imgUrl, this.bike, level);
             }
         } catch {
         }
@@ -538,8 +571,10 @@ export class HomeScene extends Phaser.Scene {
         };
     }
 
-    private loadExternalImageAndApply(key: string, url: string, target: Phaser.GameObjects.Image): Promise<void> {
+    private loadExternalImageAndApply(key: string, url: string, target: Phaser.GameObjects.Image, level: number = 1): Promise<void> {
         return new Promise((resolve) => {
+            const defaultKey = `lv${level}`;
+
             // If already loaded with same key, just swap
             if (this.textures.exists(key)) {
                 try {
@@ -557,16 +592,16 @@ export class HomeScene extends Phaser.Scene {
                 try {
                     if (this.textures.exists(uniqueKey)) {
                         target.setTexture(uniqueKey);
-                    } else if (this.textures.exists('bike')) {
-                        // Fallback to default bike image if external load failed
-                        target.setTexture('bike');
+                    } else if (this.textures.exists(defaultKey)) {
+                        // Fallback to default level image if external load failed
+                        target.setTexture(defaultKey);
                     }
                     this.fitWidth(target, this.scale.width * 0.85);
                 } catch {
-                    // Final safeguard: try to use default bike texture
+                    // Final safeguard: try to use default level texture
                     try {
-                        if (this.textures.exists('bike')) {
-                            target.setTexture('bike');
+                        if (this.textures.exists(defaultKey)) {
+                            target.setTexture(defaultKey);
                             this.fitWidth(target, this.scale.width * 0.85);
                         }
                     } catch {
@@ -577,6 +612,31 @@ export class HomeScene extends Phaser.Scene {
             });
             this.load.start();
         });
+    }
+
+    private showLoading() {
+        if (!this.loadingSpinner) return;
+        this.loadingSpinner.setVisible(true);
+        // Start rotation animation
+        if (this.loadingTween) {
+            this.loadingTween.stop();
+        }
+        this.loadingTween = this.tweens.add({
+            targets: this.loadingSpinner,
+            angle: 360,
+            duration: 1000,
+            repeat: -1,
+            ease: 'Linear'
+        });
+    }
+
+    private hideLoading() {
+        if (!this.loadingSpinner) return;
+        this.loadingSpinner.setVisible(false);
+        if (this.loadingTween) {
+            this.loadingTween.stop();
+            this.loadingTween = undefined;
+        }
     }
 
     // Helpers

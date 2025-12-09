@@ -5,7 +5,8 @@ import {getAppFontFamily} from "@/utils/fonts";
 import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
 import CoinBar from "@/ui/CoinBar";
-import {getProfile} from "@/services/globalApi";
+import ViewPager, {ViewPagerPage} from "@/ui/ViewPager";
+import {getProfile, fetchProfileIfStale} from "@/services/globalApi";
 
 export type LevelPreviewItem = {
     level?: number;
@@ -28,8 +29,7 @@ export default class LevelPreviewScene extends Phaser.Scene {
     private titleText?: Phaser.GameObjects.Text;
     private requirementText!: Phaser.GameObjects.Text;
     private levelButton!: UiButton;
-    private bike!: Phaser.GameObjects.Image;
-    private dots: Phaser.GameObjects.Arc[] = [];
+    private viewPager!: ViewPager;
     private upgradeBtn!: UiButton;
     private closeBtn!: UiButton;
 
@@ -47,7 +47,7 @@ export default class LevelPreviewScene extends Phaser.Scene {
         this.items = data?.items && data.items.length > 0 ? data.items : [];
         this.currentIndex = Math.min(Math.max(0, data?.startIndex ?? 0), Math.max(0, this.items.length - 1));
         this.previousScene = data?.previousScene ?? Scence.Home;
-        
+
         // If no items provided, fallback to current buddy level
         if (this.items.length === 0) {
             const p = getProfile();
@@ -76,7 +76,7 @@ export default class LevelPreviewScene extends Phaser.Scene {
         }
         // Back arrow icon
         if (!this.textures.exists("back_arrow")) {
-            this.load.svg("back_arrow", "/Vector-1.svg");
+            this.load.image("back_arrow", "/ic_arrow_left.png");
         }
     }
 
@@ -110,40 +110,39 @@ export default class LevelPreviewScene extends Phaser.Scene {
         this.fitHeight(this.shareIcon, height * 0.055);
         this.shareIcon.setInteractive({useHandCursor: true});
 
-        // Title: prefer image, else text (match WelcomeScene sizing/position policy)
+        // Title: prefer image, else text - constrained to bottom of coinbar
+        const coinBarBottom = this.coinBarUi.getBottomCenter().y;
+        const titleMarginTop = 16 * su;
         if (this.textures.exists("main_header")) {
-            this.titleImage = this.add.image(width / 2, height * 0.19, "main_header").setOrigin(0.5);
+            this.titleImage = this.add.image(width / 2, 0, "main_header").setOrigin(0.5, 0);
             this.fitWidth(this.titleImage, width * 0.7);
+            this.titleImage.setY(coinBarBottom + titleMarginTop);
         } else {
-            this.titleText = this.add.text(width / 2, height * 0.19, "XẾ CƯNG\nAHA", {
+            this.titleText = this.add.text(width / 2, coinBarBottom + titleMarginTop, "XẾ CƯNG\nAHA", {
                 fontFamily: getAppFontFamily(),
                 fontSize: '56px',
                 color: "#ff8b43",
                 align: "center",
                 stroke: "#0e4370",
                 strokeThickness: Math.max(6, Math.floor(width * 0.01)),
-            }).setOrigin(0.5);
+            }).setOrigin(0.5, 0);
         }
 
-        // Upgrade requirement text (replaces congrats text in WelcomeScene)
-        this.requirementText = this.add.text(width / 2, height * 0.32, "", {
+        // Level button (non-interactive, just displays current preview level) - centered vertically
+        this.levelButton = new UiButton(this, width / 2, height / 2, "CẤP ĐỘ 1", 156 * su, true, true);
+        this.add.existing(this.levelButton);
+        this.levelButton.setFontSize(Math.round(16 * su));
+
+        // Upgrade requirement text - full width with horizontal padding 16*su, above level button with margin bottom 8*su
+        const requirementTextY = height / 2 - this.levelButton.height / 2 - 8 * su;
+        this.requirementText = this.add.text(width / 2, requirementTextY, "", {
             fontFamily: getAppFontFamily(),
             fontStyle: '600',
             fontSize: Math.round(24 * su) + 'px',
             color: "#ffffff",
             align: "center",
-            wordWrap: {width: width * 0.8},
-        }).setOrigin(0.5);
-
-        // Level button (non-interactive, just displays current preview level)
-        this.levelButton = new UiButton(this, width / 2, height * 0.405, "CẤP ĐỘ 1", width * 0.5, true, true);
-        this.add.existing(this.levelButton);
-
-        // Bike image area (centered, large)
-        this.bike = this.add.image(width / 2, height * 0.62, '__temp').setOrigin(0.5);
-        
-        // Navigation dots (below bike)
-        this.buildDots(width / 2, height * 0.82, 6 * su, 16 * su);
+            wordWrap: {width: width - 32 * su},
+        }).setOrigin(0.5, 1);
 
         // Two bottom buttons: NÂNG CẤP and ĐÓNG
         const btnY = height - 80 * su;
@@ -170,48 +169,76 @@ export default class LevelPreviewScene extends Phaser.Scene {
             this.scene.start(this.previousScene);
         });
 
-        // Setup swipe gestures on bike
-        this.setupSwipeGestures();
+        // ViewPager for bike images - constrained to bottom of levelButton
+        const levelButtonBottom = height / 2 + this.levelButton.height / 2;
+        const pagerMarginTop = 16 * su;
+        const pagerY = levelButtonBottom + pagerMarginTop;
+        const closeBtnTop = btnY - this.closeBtn.height / 2;
+        const availableHeight = closeBtnTop - pagerY - 40 * su; // Leave space for dots
+        const pagerWidth = width * 0.85;
+        const pagerHeight = Math.min(availableHeight * 0.8, height * 0.35);
+
+        // Create initial pages array (empty keys, will be loaded)
+        const pages: ViewPagerPage[] = this.items.map((item, index) => ({
+            key: `level_preview_bike_${index}`,
+            data: item,
+        }));
+
+        // Create ViewPager with dots
+        this.viewPager = new ViewPager(this, width / 2, pagerY, pages, {
+            pageWidth: pagerWidth,
+            pageHeight: pagerHeight,
+            showDots: true,
+            dotRadius: 6 * su,
+            dotGap: 16 * su,
+            dotsOffsetY: 20 * su,
+        });
+        this.add.existing(this.viewPager);
+
+        // Handle page changes
+        this.viewPager.onPageChange((index, page) => {
+            this.currentIndex = index;
+            this.updatePageInfo();
+        });
 
         // Layout handler for responsive sizing
         this.scale.on('resize', this.layout, this);
 
-        // Initial render
-        this.render();
+        // Fetch profile if stale (over 5 mins) and update coin bar
+        this.updateCoinBar();
+
+        // Initial render - load all bike images and update page info
+        this.loadAllBikeImages().then(() => {
+            this.updatePageInfo();
+        });
     }
 
-    private buildDots(centerX: number, y: number, r: number, gap: number) {
-        // Clear existing dots
-        for (const d of this.dots) d.destroy();
-        this.dots = [];
-        if (this.items.length <= 1) return;
-        const totalW = (this.items.length - 1) * gap;
-        const startX = centerX - totalW / 2;
-        for (let i = 0; i < this.items.length; i++) {
-            const dot = this.add.circle(startX + i * gap, y, r, 0xD1D5DB, 1);
-            this.dots.push(dot);
-        }
-    }
-
-    private highlightDot() {
-        if (this.dots.length === 0) return;
-        for (let i = 0; i < this.dots.length; i++) {
-            const active = i === this.currentIndex;
-            this.dots[i].setFillStyle(active ? 0x111827 : 0xD1D5DB, 1);
+    private async updateCoinBar() {
+        try {
+            const profile = await fetchProfileIfStale();
+            if (profile && typeof profile.balance === 'number') {
+                this.coinBarUi.setValue(`${profile.balance} XU`);
+            }
+        } catch (e) {
+            // If fetch fails, use cached profile
+            const cached = getProfile();
+            if (cached && typeof cached.balance === 'number') {
+                this.coinBarUi.setValue(`${cached.balance} XU`);
+            }
         }
     }
 
     private showLoading() {
         const {width, height} = this.scale;
         const su = scaleUnit();
-        
+
         // Create loading spinner if it doesn't exist
         if (!this.loadingSpinner) {
             this.loadingSpinner = this.add.circle(width / 2, height * 0.62, 20 * su, 0x0e4370, 0);
             this.loadingSpinner.setStrokeStyle(4 * su, 0x0e4370, 1);
             this.loadingSpinner.setDepth(1000);
         }
-        
+
         // Create loading text if it doesn't exist
         if (!this.loadingText) {
             this.loadingText = this.add.text(width / 2, height * 0.62 + 35 * su, "Đang tải...", {
@@ -221,11 +248,11 @@ export default class LevelPreviewScene extends Phaser.Scene {
                 align: "center",
             }).setOrigin(0.5).setDepth(1000);
         }
-        
+
         // Show and animate spinner
         this.loadingSpinner.setVisible(true);
         this.loadingText.setVisible(true);
-        
+
         // Rotate animation
         this.tweens.add({
             targets: this.loadingSpinner,
@@ -246,11 +273,9 @@ export default class LevelPreviewScene extends Phaser.Scene {
         }
     }
 
-    private async render() {
+    private updatePageInfo() {
         const item = this.items[this.currentIndex];
         if (!item) return;
-
-        const su = scaleUnit();
 
         // Update level button text
         const levelStr = (item.level ?? 0) > 0 ? `CẤP ĐỘ ${item.level}` : 'CẤP ĐỘ';
@@ -266,31 +291,11 @@ export default class LevelPreviewScene extends Phaser.Scene {
             this.requirementText.setVisible(false);
         }
 
-        // Show loading indicator while image loads
-        this.showLoading();
-        
-        // Update bike image
-        try {
-            await this.applyBikeImage(item);
-        } finally {
-            // Hide loading indicator after image loads (success or failure)
-            this.hideLoading();
-        }
-        
-        // Scale bike to fit nicely
-        const maxW = this.scale.width * 0.85;
-        const maxH = this.scale.height * 0.35;
-        const scale = Math.min(maxW / this.bike.width, maxH / this.bike.height);
-        this.bike.setScale(scale);
-
-        // Update dots
-        this.highlightDot();
-        
         // Enable/disable upgrade button based on coin comparison
         const profile = getProfile();
         const userCoins = profile?.balance ?? 0;
         const upgradeCost = item.upgrade_cost ?? 0;
-        
+
         // Enable button only if:
         // 1. There is an upgrade cost (not viewing current level)
         // 2. User has enough coins
@@ -298,47 +303,69 @@ export default class LevelPreviewScene extends Phaser.Scene {
         this.upgradeBtn.setEnabled(canUpgrade);
     }
 
-    private async applyBikeImage(item: LevelPreviewItem) {
-        const key = `level_preview_bike_${this.currentIndex}`;
-        
+    private async loadAllBikeImages() {
+        this.showLoading();
+        try {
+            // Load all bike images for all items
+            for (let i = 0; i < this.items.length; i++) {
+                const item = this.items[i];
+                const key = `level_preview_bike_${i}`;
+                const actualKey = await this.loadBikeImageForIndex(i, item, key);
+                // Update ViewPager page texture after loading with the actual texture key
+                this.viewPager.setPageTexture(i, actualKey);
+            }
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
+     * Load bike image for a specific index.
+     * Returns the actual texture key that was loaded (may be fallback).
+     */
+    private async loadBikeImageForIndex(index: number, item: LevelPreviewItem, key: string): Promise<string> {
         // Try to load from remote URL first
         if (item.img_url && typeof item.img_url === 'string') {
             try {
                 await this.loadExternalImage(key, item.img_url);
-                this.bike.setTexture(key);
-                return;
+                return key;
             } catch {
                 // Continue to fallback
             }
         }
-        
+
         // Fallback to level-based image: lv1.png, lv2.png, lv3.png, etc.
         const level = item.level ?? 1;
         const fallbackKey = `lv${level}`;
         const fallbackPath = `/lv${level}.png`;
-        
+
+        // If fallback already exists, use it directly
         if (this.textures.exists(fallbackKey)) {
-            this.bike.setTexture(fallbackKey);
-            return;
+            return fallbackKey;
         }
-        
+
+        // Try to load the fallback image
         try {
             this.load.image(fallbackKey, fallbackPath);
-            await new Promise<void>(resolve => {
+            await new Promise<void>((resolve, reject) => {
                 this.load.once('complete', () => resolve());
+                this.load.once('loaderror', () => reject(new Error('loaderror')));
                 this.load.start();
             });
             if (this.textures.exists(fallbackKey)) {
-                this.bike.setTexture(fallbackKey);
-                return;
+                return fallbackKey;
             }
         } catch {
+            // Fallback load failed
         }
-        
+
         // Last resort: default bike if present
         if (this.textures.exists('bike')) {
-            this.bike.setTexture('bike');
+            return 'bike';
         }
+
+        // Return original key even if texture doesn't exist (will show placeholder)
+        return key;
     }
 
     private loadExternalImage(key: string, url: string): Promise<void> {
@@ -363,51 +390,6 @@ export default class LevelPreviewScene extends Phaser.Scene {
                 reject(e as any);
             }
         });
-    }
-
-    private setupSwipeGestures() {
-        if (!this.bike) return;
-        this.bike.setInteractive({useHandCursor: true});
-        
-        let startX = 0;
-        let startY = 0;
-        let dragging = false;
-        
-        this.bike.on('pointerdown', (p: Phaser.Input.Pointer) => {
-            startX = p.x;
-            startY = p.y;
-            dragging = true;
-        });
-        
-        this.bike.on('pointerup', (p: Phaser.Input.Pointer) => {
-            if (!dragging) return;
-            const dx = p.x - startX;
-            const dy = p.y - startY;
-            dragging = false;
-            const threshold = Math.max(30, 40 * scaleUnit());
-            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > threshold) {
-                if (dx < 0) this.next(); 
-                else this.prev();
-            }
-        });
-    }
-
-    private async next() {
-        if (this.items.length <= 1) return;
-        // Pager behavior: stop at last item instead of wrapping
-        if (this.currentIndex < this.items.length - 1) {
-            this.currentIndex++;
-            await this.render();
-        }
-    }
-
-    private async prev() {
-        if (this.items.length <= 1) return;
-        // Pager behavior: stop at first item instead of wrapping
-        if (this.currentIndex > 0) {
-            this.currentIndex--;
-            await this.render();
-        }
     }
 
     private layout() {

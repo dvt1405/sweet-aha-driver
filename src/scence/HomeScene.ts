@@ -78,8 +78,7 @@ export class HomeScene extends Phaser.Scene {
     private unsubscribeProfile?: () => void;
     private levelPreviewPopup?: LevelPreviewPopup;
     private loadingContainer?: Phaser.GameObjects.Container;
-    private loadingDots: Phaser.GameObjects.Arc[] = [];
-    private loadingTweens: Phaser.Tweens.Tween[] = [];
+    private loadingSpinner?: Phaser.GameObjects.Graphics;
     private fadeTweens: Phaser.Tweens.Tween[] = [];
 
     constructor() {
@@ -241,27 +240,19 @@ export class HomeScene extends Phaser.Scene {
         this.bike = this.add.image(w / 2, h * 0.78, "bike").setOrigin(0.5);
         this.fitWidth(this.bike, w * 0.85);
 
-        // Modern loading indicator (3 animated dots in a container)
+        // Loading indicator (spinner and text, matching LevelPreviewPopup)
         this.loadingContainer = this.add.container(w / 2, h * 0.78);
         this.loadingContainer.setVisible(false);
-        
-        const dotRadius = 8 * scaleUnit();
-        const dotSpacing = 28 * scaleUnit();
-        const dotColors = [0xff8b43, 0xffa366, 0xffbd8a]; // Orange gradient colors
-        
-        this.loadingDots = [];
-        for (let i = 0; i < 3; i++) {
-            const dot = this.add.arc(
-                (i - 1) * dotSpacing, // Center the 3 dots (-1, 0, 1) * spacing
-                0,
-                dotRadius,
-                0, 360, false,
-                dotColors[i]
-            );
-            dot.setStrokeStyle(2 * scaleUnit(), 0x0e4370, 0.3);
-            this.loadingDots.push(dot);
-            this.loadingContainer.add(dot);
-        }
+
+        const spinner = this.add.graphics();
+        const su = scaleUnit();
+        const radius = 20 * su;
+        spinner.lineStyle(4 * su, 0xffffff, 1);
+        spinner.beginPath();
+        spinner.arc(0, 0, radius, 0, Math.PI * 1.5, false);
+        spinner.strokePath();
+        this.loadingContainer.add(spinner);
+        this.loadingSpinner = spinner;
 
         this.tweens.add({
             targets: this.bike,
@@ -613,49 +604,27 @@ export class HomeScene extends Phaser.Scene {
         if (!this.loadingContainer) return;
         this.loadingContainer.setVisible(true);
         
-        // Stop any existing tweens
-        this.loadingTweens.forEach(tween => tween.stop());
-        this.loadingTweens = [];
-        
-        // Reset dots to initial state
-        this.loadingDots.forEach(dot => {
-            dot.setScale(1);
-            dot.setAlpha(1);
-            dot.y = 0;
-        });
-        
-        // Create staggered bounce animation for each dot
-        this.loadingDots.forEach((dot, index) => {
-            const tween = this.tweens.add({
-                targets: dot,
-                y: -16 * scaleUnit(),
-                scaleX: 1.2,
-                scaleY: 1.2,
-                alpha: 0.7,
-                duration: 400,
-                delay: index * 150, // Stagger each dot
-                yoyo: true,
+        // Spin the arc continuously
+        if (this.loadingSpinner) {
+            this.tweens.add({
+                targets: this.loadingSpinner,
+                angle: 360,
+                duration: 1000,
                 repeat: -1,
-                ease: 'Sine.easeInOut'
+                ease: 'Linear'
             });
-            this.loadingTweens.push(tween);
-        });
+        }
     }
 
     private hideLoading() {
         if (!this.loadingContainer) return;
         this.loadingContainer.setVisible(false);
-        
-        // Stop all tweens
-        this.loadingTweens.forEach(tween => tween.stop());
-        this.loadingTweens = [];
-        
-        // Reset dots to initial state
-        this.loadingDots.forEach(dot => {
-            dot.setScale(1);
-            dot.setAlpha(1);
-            dot.y = 0;
-        });
+
+        // Stop spinner tween
+        if (this.loadingSpinner) {
+            this.tweens.killTweensOf(this.loadingSpinner);
+            this.loadingSpinner.angle = 0;
+        }
     }
 
     private showLevelPreviewPopup() {

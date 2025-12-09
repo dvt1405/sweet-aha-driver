@@ -21,6 +21,7 @@ import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistorySc
 import {is} from "@babel/types";
 import {ApiError} from "next/dist/server/api-utils";
 import {type LevelPreviewItem} from "@/scence/LevelPreviewScene";
+import LevelPreviewPopup from "@/ui/LevelPreviewPopup";
 
 /**
  * Generate test coin history data for performance testing
@@ -75,9 +76,11 @@ export class HomeScene extends Phaser.Scene {
     private bike!: Phaser.GameObjects.Image;
     private levelButton!: UiButton;
     private unsubscribeProfile?: () => void;
+    private levelPreviewPopup?: LevelPreviewPopup;
     private loadingContainer?: Phaser.GameObjects.Container;
     private loadingDots: Phaser.GameObjects.Arc[] = [];
     private loadingTweens: Phaser.Tweens.Tween[] = [];
+    private fadeTweens: Phaser.Tweens.Tween[] = [];
 
     constructor() {
         super(Scence.Home);
@@ -94,6 +97,7 @@ export class HomeScene extends Phaser.Scene {
         this.load.image("bg_progress_active", "/bg_progress_active.png");
         this.load.image("main_header", "/main_header.png");
         this.load.image("bike", "/ic_bike.png");
+        this.load.image("back_arrow", "/ic_arrow_left.png");
         // Effects and popup resources
         this.load.image("burst", "/burst.png");
         this.load.image("congrats_text_bg", "/bg_main_congartulation_text.png");
@@ -271,39 +275,7 @@ export class HomeScene extends Phaser.Scene {
         // Tap bike to show level preview slider (current + next level)
         this.bike.setInteractive({useHandCursor: true})
             .on('pointerdown', () => {
-                try {
-                    const p = getProfile();
-                    const items: LevelPreviewItem[] = [];
-                    // Current level slide
-                    const cur = p?.buddy ?? {};
-                    items.push({
-                        level: cur.level ?? 1,
-                        model_name: cur.model_name,
-                        img_url: cur.img_url,
-                        // no upgrade_cost for current level
-                    });
-                    // Next level slide (if available)
-                    const next = p?.next_level_buddy ?? undefined;
-                    if (next) {
-                        items.push({
-                            level: next.level,
-                            model_name: next.model_name,
-                            upgrade_cost: next.upgrade_cost,
-                            img_url: next.img_url,
-                        });
-                    }
-                    // If we still have only one item, duplicate to allow swipe UX
-                    const finalItems = items.length > 0 ? items : [{
-                        level: 1,
-                    }];
-
-                    this.scene.start(Scence.LEVEL_PREVIEW, {
-                        items: finalItems,
-                        startIndex: 0,
-                        previousScene: Scence.Home
-                    });
-                } catch {
-                }
+                this.showLevelPreviewPopup();
             });
 
         // Bottom progress button
@@ -419,10 +391,16 @@ export class HomeScene extends Phaser.Scene {
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.unsubscribeProfile?.();
             this.unsubscribeProfile = undefined;
+            this.levelPreviewPopup?.close();
+            this.levelPreviewPopup = undefined;
+            this.stopFadeTweens();
         });
         this.events.on(Phaser.Scenes.Events.DESTROY, () => {
             this.unsubscribeProfile?.();
             this.unsubscribeProfile = undefined;
+            this.levelPreviewPopup?.close();
+            this.levelPreviewPopup = undefined;
+            this.stopFadeTweens();
         });
         if (token) {
             // Show loading while fetching profile and bike image
@@ -677,6 +655,96 @@ export class HomeScene extends Phaser.Scene {
             dot.setScale(1);
             dot.setAlpha(1);
             dot.y = 0;
+        });
+    }
+
+    private showLevelPreviewPopup() {
+        try {
+            // Close existing popup if any to avoid duplicates
+            this.levelPreviewPopup?.close();
+
+            const p = getProfile();
+            const items: LevelPreviewItem[] = [];
+            const cur = p?.buddy ?? {};
+            items.push({
+                level: cur.level ?? 1,
+                model_name: cur.model_name,
+                img_url: cur.img_url,
+            });
+            const next = p?.next_level_buddy ?? undefined;
+            if (next) {
+                items.push({
+                    level: next.level,
+                    model_name: next.model_name,
+                    upgrade_cost: next.upgrade_cost,
+                    img_url: next.img_url,
+                });
+            }
+
+            const finalItems = items.length > 0 ? items : [{level: 1}];
+
+            // Fade out underlying HomeScene elements while popup is visible
+            this.fadeHomeElements(0, 200);
+
+            this.levelPreviewPopup = new LevelPreviewPopup(this, {
+                items: finalItems,
+                startIndex: 0,
+                onClose: () => {
+                    this.levelPreviewPopup = undefined;
+                    // Restore HomeScene elements when popup closes
+                    this.fadeHomeElements(1, 200);
+                }
+            });
+        } catch {
+            // Ensure UI returns to visible state if popup creation fails
+            this.fadeHomeElements(1, 0);
+        }
+    }
+
+    private getFadeTargets(): Phaser.GameObjects.GameObject[] {
+        const targets: Phaser.GameObjects.GameObject[] = [];
+        if (this.bg) targets.push(this.bg);
+        if (this.coinBarUi) targets.push(this.coinBarUi);
+        if (this.shareIcon) targets.push(this.shareIcon);
+        if (this.titleImage) targets.push(this.titleImage);
+        else if (this.titleText) targets.push(this.titleText);
+        if (this.btnCheckIn) targets.push(this.btnCheckIn);
+        if (this.btnUpgrade) targets.push(this.btnUpgrade);
+        if (this.btnHistory) targets.push(this.btnHistory);
+        if (this.btnGuide) targets.push(this.btnGuide);
+        if (this.bike) targets.push(this.bike);
+        if (this.levelButton) targets.push(this.levelButton);
+        if (this.loadingContainer) targets.push(this.loadingContainer);
+        return targets;
+    }
+
+    private stopFadeTweens() {
+        this.fadeTweens.forEach(t => t.stop());
+        this.fadeTweens = [];
+    }
+
+    private fadeHomeElements(targetAlpha: number, duration: number) {
+        const targets = this.getFadeTargets();
+        if (targets.length === 0) return;
+
+        this.stopFadeTweens();
+
+        targets.forEach(obj => {
+            // Skip destroyed objects
+            if (!obj || !obj.scene) return;
+
+            if (duration <= 0) {
+                obj.setAlpha(targetAlpha);
+                return;
+            }
+
+            const tween = this.tweens.add({
+                targets: obj,
+                alpha: targetAlpha,
+                duration,
+                ease: 'Linear',
+            });
+            this.fadeTweens.push(tween);
         });
     }
 

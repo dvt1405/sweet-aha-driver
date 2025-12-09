@@ -42,7 +42,7 @@ export function showCoinHistoryPopup(
 
     const scrollbarSpace = 24 * su; // Reserve space for scrollbar
     const listW = popup.content.width * 0.9 - 24 * su - scrollbarSpace; // Account for BasePopup's internal padding and scrollbar
-    const listH = popup.content.height;
+    const listH = popup.contentHeight;
 
     // Content container for list/empty/loading/error state
     const content = scene.add.container((w - listW)/2, 0);
@@ -564,10 +564,16 @@ function createList(
         }
     };
 
-    // Setup mask
-    const maskGfx = scene.add.graphics({x: content.x, y: content.y});
+    // Setup mask (in world coordinates matching the popup content viewport)
+    const viewRect = {
+        x: popup.root.x + popup.content.x + content.x,
+        y: popup.root.y + popup.content.y + content.y,
+        w: w,
+        h: viewH,
+    };
+    const maskGfx = scene.add.graphics({x: viewRect.x, y: viewRect.y});
     maskGfx.fillStyle(0xFFFFFF, 1);
-    maskGfx.fillRect(0, 0, w, h);
+    maskGfx.fillRect(0, 0, viewRect.w, viewRect.h);
     const mask = maskGfx.createGeometryMask();
     content.setMask(mask);
     maskGfx.setVisible(false);
@@ -578,7 +584,7 @@ function createList(
     // Enable scrolling if content is taller than view
     if (contentH > viewH) {
         enableScrollLazy(scene, content, popup, contentH, viewH, w, h, su, renderVisibleItems);
-        createScrollbar(scene, popup, contentH, viewH, su);
+        createScrollbar(scene, popup, content, contentH, viewH, su);
     }
 }
 
@@ -604,6 +610,10 @@ function enableScrollLazy(
     const scrollTrack = scene.add.graphics();
     const scrollThumb = scene.add.graphics();
 
+    // Add to popup root so they get destroyed when popup is dismissed
+    popup.root.add(scrollTrack);
+    popup.root.add(scrollThumb);
+
     const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
     const minYBound = -(contentH - viewH);
     const overscrollMax = Math.round(100 * su);
@@ -628,8 +638,8 @@ function enableScrollLazy(
     const updateScrollbar = () => {
         if (contentH <= viewH) return;
         const trackX = popup.root.x + popup.width / 2 - 18 * su;
-        const trackTop = popup.root.y - popup.height / 2 + 24 * su;
-        const trackH = viewH - 16 * su;
+        const trackTop = popup.root.y + popup.content.y + content.y;
+        const trackH = viewH;
         scrollThumb.clear();
         const ratio = viewH / contentH;
         const thumbH = Math.max(30 * su, trackH * ratio);
@@ -814,6 +824,7 @@ function formatNumber(n: number): string {
 function createScrollbar(
     scene: Phaser.Scene,
     popup: BasePopup,
+    content: Phaser.GameObjects.Container,
     contentH: number,
     viewH: number,
     su: number
@@ -821,10 +832,13 @@ function createScrollbar(
     const scrollTrack = scene.add.graphics();
 
     const trackX = popup.root.x + popup.width / 2 - 18 * su;
-    const trackTop = popup.root.y - popup.height / 2 + 24 * su;
-    const trackH = viewH - 16 * su;
+    const trackTop = popup.root.y + popup.content.y + content.y;
+    const trackH = viewH;
 
     // Track
     scrollTrack.fillStyle(0xD9DDE3, 0.5);
     scrollTrack.fillRoundedRect(trackX, trackTop, 4 * su, trackH, 2 * su);
+
+    // Add to popup root so it gets destroyed when popup is dismissed
+    popup.root.add(scrollTrack);
 }

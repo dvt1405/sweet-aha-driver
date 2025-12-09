@@ -33,7 +33,7 @@ export default class LevelPreviewPopup {
     private viewPager!: ViewPager;
     private upgradeBtn!: UiButton;
     private closeBtn!: UiButton;
-    private loadingSpinner?: Phaser.GameObjects.Arc;
+    private loadingSpinner?: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
     private loadingText?: Phaser.GameObjects.Text;
 
     private readonly items: LevelPreviewItem[] = [];
@@ -65,6 +65,7 @@ export default class LevelPreviewPopup {
 
         this.build();
         this.updateCoinBar();
+        this.updatePageInfo();
         this.loadAllBikeImages().then(() => this.updatePageInfo());
     }
 
@@ -229,16 +230,22 @@ export default class LevelPreviewPopup {
         const su = scaleUnit();
 
         if (!this.loadingSpinner) {
-            this.loadingSpinner = this.scene.add.circle(width / 2, height * 0.62, 20 * su, 0x0e4370, 0)
-                .setDepth(this.depthBase + 3);
-            this.loadingSpinner.setStrokeStyle(4 * su, 0x0e4370, 1);
+            const spinner = this.scene.add.graphics();
+            const radius = 20 * su;
+            spinner.lineStyle(4 * su, 0xffffff, 1);
+            spinner.beginPath();
+            spinner.arc(0, 0, radius, 0, Math.PI * 1.5, false);
+            spinner.strokePath();
+            spinner.setPosition(width / 2, height * 0.62);
+            spinner.setDepth(this.depthBase + 3);
+            this.loadingSpinner = spinner;
         }
 
         if (!this.loadingText) {
             this.loadingText = this.scene.add.text(width / 2, height * 0.62 + 35 * su, "Đang tải...", {
                 fontFamily: getAppFontFamily(),
                 fontSize: Math.round(18 * su) + 'px',
-                color: "#0e4370",
+                color: "#ffffff",
                 align: "center",
             }).setOrigin(0.5).setDepth(this.depthBase + 3);
         }

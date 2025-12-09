@@ -75,8 +75,9 @@ export class HomeScene extends Phaser.Scene {
     private bike!: Phaser.GameObjects.Image;
     private levelButton!: UiButton;
     private unsubscribeProfile?: () => void;
-    private loadingSpinner?: Phaser.GameObjects.Arc;
-    private loadingTween?: Phaser.Tweens.Tween;
+    private loadingContainer?: Phaser.GameObjects.Container;
+    private loadingDots: Phaser.GameObjects.Arc[] = [];
+    private loadingTweens: Phaser.Tweens.Tween[] = [];
 
     constructor() {
         super(Scence.Home);
@@ -236,11 +237,27 @@ export class HomeScene extends Phaser.Scene {
         this.bike = this.add.image(w / 2, h * 0.78, "bike").setOrigin(0.5);
         this.fitWidth(this.bike, w * 0.85);
 
-        // Loading spinner (positioned at bike location, hidden by default)
-        this.loadingSpinner = this.add.arc(w / 2, h * 0.78, 40 * scaleUnit(), 0, 270, false, 0xff8b43);
-        this.loadingSpinner.setStrokeStyle(6 * scaleUnit(), 0xff8b43);
-        this.loadingSpinner.setClosePath(false);
-        this.loadingSpinner.setVisible(false);
+        // Modern loading indicator (3 animated dots in a container)
+        this.loadingContainer = this.add.container(w / 2, h * 0.78);
+        this.loadingContainer.setVisible(false);
+        
+        const dotRadius = 8 * scaleUnit();
+        const dotSpacing = 28 * scaleUnit();
+        const dotColors = [0xff8b43, 0xffa366, 0xffbd8a]; // Orange gradient colors
+        
+        this.loadingDots = [];
+        for (let i = 0; i < 3; i++) {
+            const dot = this.add.arc(
+                (i - 1) * dotSpacing, // Center the 3 dots (-1, 0, 1) * spacing
+                0,
+                dotRadius,
+                0, 360, false,
+                dotColors[i]
+            );
+            dot.setStrokeStyle(2 * scaleUnit(), 0x0e4370, 0.3);
+            this.loadingDots.push(dot);
+            this.loadingContainer.add(dot);
+        }
 
         this.tweens.add({
             targets: this.bike,
@@ -371,9 +388,9 @@ export class HomeScene extends Phaser.Scene {
             const bikeY = bottomY - this.levelButton.height / 2 - this.bike.height / 2 - 56 * su;
             this.bike.setPosition(w2 / 2, bikeY);
 
-            // Update loading spinner position to match bike
-            if (this.loadingSpinner) {
-                this.loadingSpinner.setPosition(w2 / 2, bikeY);
+            // Update loading container position to match bike
+            if (this.loadingContainer) {
+                this.loadingContainer.setPosition(w2 / 2, bikeY);
             }
         };
 
@@ -615,28 +632,52 @@ export class HomeScene extends Phaser.Scene {
     }
 
     private showLoading() {
-        if (!this.loadingSpinner) return;
-        this.loadingSpinner.setVisible(true);
-        // Start rotation animation
-        if (this.loadingTween) {
-            this.loadingTween.stop();
-        }
-        this.loadingTween = this.tweens.add({
-            targets: this.loadingSpinner,
-            angle: 360,
-            duration: 1000,
-            repeat: -1,
-            ease: 'Linear'
+        if (!this.loadingContainer) return;
+        this.loadingContainer.setVisible(true);
+        
+        // Stop any existing tweens
+        this.loadingTweens.forEach(tween => tween.stop());
+        this.loadingTweens = [];
+        
+        // Reset dots to initial state
+        this.loadingDots.forEach(dot => {
+            dot.setScale(1);
+            dot.setAlpha(1);
+            dot.y = 0;
+        });
+        
+        // Create staggered bounce animation for each dot
+        this.loadingDots.forEach((dot, index) => {
+            const tween = this.tweens.add({
+                targets: dot,
+                y: -16 * scaleUnit(),
+                scaleX: 1.2,
+                scaleY: 1.2,
+                alpha: 0.7,
+                duration: 400,
+                delay: index * 150, // Stagger each dot
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+            this.loadingTweens.push(tween);
         });
     }
 
     private hideLoading() {
-        if (!this.loadingSpinner) return;
-        this.loadingSpinner.setVisible(false);
-        if (this.loadingTween) {
-            this.loadingTween.stop();
-            this.loadingTween = undefined;
-        }
+        if (!this.loadingContainer) return;
+        this.loadingContainer.setVisible(false);
+        
+        // Stop all tweens
+        this.loadingTweens.forEach(tween => tween.stop());
+        this.loadingTweens = [];
+        
+        // Reset dots to initial state
+        this.loadingDots.forEach(dot => {
+            dot.setScale(1);
+            dot.setAlpha(1);
+            dot.y = 0;
+        });
     }
 
     // Helpers

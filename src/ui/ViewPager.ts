@@ -10,6 +10,8 @@ export type ViewPagerOptions = {
     dotInactiveColor?: number;
     showDots?: boolean;
     dotsOffsetY?: number; // offset from bottom of pager area
+    backgroundColor?: number;
+    backgroundAlpha?: number;
 };
 
 export type ViewPagerPage = {
@@ -29,9 +31,10 @@ export default class ViewPager extends Phaser.GameObjects.Container {
     private currentIndex = 0;
     private pageWidth: number;
     private pageHeight: number;
+    private backgroundRect!: Phaser.GameObjects.Rectangle;
     private pageImage!: Phaser.GameObjects.Image;
     private hitZone!: Phaser.GameObjects.Zone;
-    private dots: Phaser.GameObjects.Arc[] = [];
+    private dots: Phaser.GameObjects.Graphics[] = [];
     private dotsContainer!: Phaser.GameObjects.Container;
     private opts: Required<ViewPagerOptions>;
     private onPageChangeCallback?: (index: number, page: ViewPagerPage) => void;
@@ -53,12 +56,14 @@ export default class ViewPager extends Phaser.GameObjects.Container {
         const defaults: Required<ViewPagerOptions> = {
             pageWidth: 300 * su,
             pageHeight: 200 * su,
-            dotRadius: 6 * su,
+            dotRadius: 4 * su,
             dotGap: 16 * su,
-            dotActiveColor: 0x111827,
-            dotInactiveColor: 0xD1D5DB,
+            dotActiveColor: 0xFFFFFFFF,
+            dotInactiveColor: 0xFF99A0AA,
             showDots: true,
             dotsOffsetY: 20 * su,
+            backgroundColor: 0x000000,
+            backgroundAlpha: 0,
         };
 
         this.opts = {...defaults, ...opts} as Required<ViewPagerOptions>;
@@ -66,8 +71,14 @@ export default class ViewPager extends Phaser.GameObjects.Container {
         this.pageHeight = this.opts.pageHeight;
         this.pages = pages || [];
 
+        // Background behind page content
+        this.backgroundRect = scene.add.rectangle(0, 0, this.pageWidth, this.pageHeight, this.opts.backgroundColor, this.opts.backgroundAlpha)
+            .setOrigin(0.5, 0);
+        this.add(this.backgroundRect);
+
         // Create page image container
         this.pageImage = scene.add.image(0, 0, '__DEFAULT').setOrigin(0.5, 0);
+        this.pageImage.setSize(this.pageWidth, this.pageHeight)
         this.add(this.pageImage);
 
         // Create an invisible hit zone covering the whole pager area for gestures
@@ -270,13 +281,30 @@ export default class ViewPager extends Phaser.GameObjects.Container {
 
     private fitPageImage() {
         const img = this.pageImage;
-        if (!img.texture || img.texture.key === '__DEFAULT') return;
+        // If no valid texture, size to pager bounds and exit
+        if (!img.texture || img.texture.key === '__DEFAULT') {
+            img.setDisplaySize(this.pageWidth, this.pageHeight);
+            img.setPosition(0, 0);
+            return;
+        }
 
-        const maxW = this.pageWidth;
-        const maxH = this.pageHeight;
-        // Use Math.max to make image fill more space (cover style) - image will be bigger
-        const scale = Math.max(maxW / img.width, maxH / img.height);
-        img.setScale(scale);
+        const pad = 16 * scaleUnit();
+        const maxW = Math.max(1, this.pageWidth * 0.85);
+        const maxH = Math.max(1, this.pageHeight);
+
+        const naturalW = Math.max(1, img.width);
+        const naturalH = Math.max(1, img.height);
+
+        // Contain: ensure the rendered image never exceeds the viewport bounds
+        const scale = maxH / naturalH
+        const displayW = naturalW * scale;
+        const displayH = naturalH * scale;
+
+        img.setDisplaySize(displayW, displayH);
+
+        // Center vertically within the page area (origin 0.5, 0)
+        const offsetY = (this.pageHeight - displayH) / 2;
+        img.setPosition(0, offsetY);
     }
 
     private updateHitArea() {
@@ -293,17 +321,22 @@ export default class ViewPager extends Phaser.GameObjects.Container {
         if (!this.opts.showDots || this.pages.length <= 1) return;
 
         const {dotRadius, dotGap, dotInactiveColor} = this.opts;
+        const dotWidth = dotRadius * 2; // 8*su
+        const dotHeight = dotRadius;    // 4*su
+        const cornerRadius = dotRadius; // 4*su
         const totalW = (this.pages.length - 1) * dotGap;
         const startX = -totalW / 2;
 
         // Position dots below the page image
-        const dotsY = this.pageHeight + this.opts.dotsOffsetY;
+        const dotsY = this.pageImage.y + this.pageImage.displayHeight + this.opts.dotsOffsetY;
         this.dotsContainer.setY(dotsY);
 
         for (let i = 0; i < this.pages.length; i++) {
-            const dot = this.scene.add.circle(startX + i * dotGap, 0, dotRadius, dotInactiveColor, 1);
-            this.dotsContainer.add(dot);
-            this.dots.push(dot);
+            const g = this.scene.add.graphics({x: startX + i * dotGap, y: 0});
+            g.fillStyle(dotInactiveColor, 1);
+            g.fillRoundedRect(-dotWidth / 2, -dotHeight / 2, dotWidth, dotHeight, cornerRadius);
+            this.dotsContainer.add(g);
+            this.dots.push(g);
         }
 
         this.highlightDot();
@@ -313,9 +346,15 @@ export default class ViewPager extends Phaser.GameObjects.Container {
         if (this.dots.length === 0) return;
 
         const {dotActiveColor, dotInactiveColor} = this.opts;
+        const dotWidth = this.opts.dotRadius * 2;
+        const dotHeight = this.opts.dotRadius;
+        const cornerRadius = this.opts.dotRadius;
         for (let i = 0; i < this.dots.length; i++) {
             const active = i === this.currentIndex;
-            this.dots[i].setFillStyle(active ? dotActiveColor : dotInactiveColor, 1);
+            const g = this.dots[i];
+            g.clear();
+            g.fillStyle(active ? dotActiveColor : dotInactiveColor, 1);
+            g.fillRoundedRect(-dotWidth / 2, -dotHeight / 2, dotWidth, dotHeight, cornerRadius);
         }
     }
 
@@ -416,6 +455,8 @@ export default class ViewPager extends Phaser.GameObjects.Container {
         this.pageHeight = height;
         this.opts.pageWidth = width;
         this.opts.pageHeight = height;
+        this.backgroundRect.setSize(width, height);
+        this.backgroundRect.setDisplaySize(width, height);
         this.setSize(width, height);
         this.renderCurrentPage();
         this.buildDots();
@@ -457,7 +498,8 @@ export default class ViewPager extends Phaser.GameObjects.Container {
     /** Get actual display height including dots */
     getTotalHeight(): number {
         if (this.opts.showDots && this.pages.length > 1) {
-            return this.pageHeight + this.opts.dotsOffsetY + this.opts.dotRadius * 2;
+            // Dot height equals dotRadius (since we render 8*su × 4*su with radius 4*su)
+            return this.pageHeight + this.opts.dotsOffsetY + this.opts.dotRadius;
         }
         return this.pageHeight;
     }

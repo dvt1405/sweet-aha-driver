@@ -58,6 +58,7 @@ export default function BikeGame() {
             <div
                 ref={containerRef}
                 className="w-full h-full"
+                style={{ touchAction: 'none' }}
             />
         </div>
     );

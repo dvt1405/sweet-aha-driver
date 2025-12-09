@@ -6,7 +6,7 @@ import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
 import CoinBar from "@/ui/CoinBar";
 import ViewPager, {ViewPagerPage} from "@/ui/ViewPager";
-import {getProfile, fetchProfileIfStale} from "@/services/globalApi";
+import {fetchProfileIfStale, getProfile} from "@/services/globalApi";
 
 export type LevelPreviewItem = {
     level?: number;
@@ -169,14 +169,30 @@ export default class LevelPreviewScene extends Phaser.Scene {
             this.scene.start(this.previousScene);
         });
 
-        // ViewPager for bike images - constrained to bottom of levelButton
-        const levelButtonBottom = height / 2 + this.levelButton.height / 2;
-        const pagerMarginTop = 16 * su;
-        const pagerY = levelButtonBottom + pagerMarginTop;
+        // ViewPager spans space between level button bottom and close button top with padding
+        const levelButtonBottom = this.levelButton.y + this.levelButton.height / 2;
+        const topPadding = 16 * su;
+        const bottomPadding = 16 * su;
+        const pagerTop = levelButtonBottom + topPadding;
         const closeBtnTop = btnY - this.closeBtn.height / 2;
-        const availableHeight = closeBtnTop - pagerY - 40 * su; // Leave space for dots
-        const pagerWidth = width * 0.85;
-        const pagerHeight = Math.min(availableHeight * 0.8, height * 0.35);
+        const pagerBottom = closeBtnTop - bottomPadding;
+
+        // Reserve space for dots at the bottom of pager content (8*su × 4*su rounded rect => radius 4*su)
+        const dotRadius = 4 * su;
+        const dotsOffsetY = 8 * su;
+
+        const availableHeight = Math.max(0, pagerBottom - pagerTop);
+        const maxPagerHeight = Math.max(0, availableHeight - (dotsOffsetY + dotRadius * 2));
+        const targetPagerHeight = Math.min(height * 0.35, maxPagerHeight);
+        const minPagerHeight = 120 * su;
+        let pagerHeight = targetPagerHeight;
+        if (pagerHeight < minPagerHeight) {
+            pagerHeight = Math.min(minPagerHeight, maxPagerHeight);
+        }
+
+        // Center pager within the available vertical slice
+        const pagerY = pagerTop;
+        const pagerWidth = width - 28 * su;
 
         // Create initial pages array (empty keys, will be loaded)
         const pages: ViewPagerPage[] = this.items.map((item, index) => ({
@@ -189,12 +205,11 @@ export default class LevelPreviewScene extends Phaser.Scene {
             pageWidth: pagerWidth,
             pageHeight: pagerHeight,
             showDots: true,
-            dotRadius: 6 * su,
+            dotRadius,
             dotGap: 16 * su,
-            dotsOffsetY: 20 * su,
+            dotsOffsetY,
         });
         this.add.existing(this.viewPager);
-
         // Handle page changes
         this.viewPager.onPageChange((index, page) => {
             this.currentIndex = index;

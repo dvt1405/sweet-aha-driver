@@ -670,8 +670,8 @@ export class HomeScene extends Phaser.Scene {
         }
     }
 
-    private getFadeTargets(): Phaser.GameObjects.GameObject[] {
-        const targets: Phaser.GameObjects.GameObject[] = [];
+    private getFadeTargets(): (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.AlphaSingle)[] {
+        const targets: (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.AlphaSingle)[] = [];
         if (this.bg) targets.push(this.bg);
         if (this.coinBarUi) targets.push(this.coinBarUi);
         if (this.shareIcon) targets.push(this.shareIcon);

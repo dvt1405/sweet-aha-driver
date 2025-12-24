@@ -263,11 +263,11 @@ export default class LevelPreviewPopup {
     }
 
     private hideLoading() {
-        if (this.loadingSpinner && !this.loadingSpinner.destroyed) {
+        if (this.loadingSpinner) {
             this.loadingSpinner.setVisible(false);
             this.scene.tweens.killTweensOf(this.loadingSpinner);
         }
-        if (this.loadingText && !this.loadingText.destroyed) {
+        if (this.loadingText) {
             this.loadingText.setVisible(false);
         }
     }

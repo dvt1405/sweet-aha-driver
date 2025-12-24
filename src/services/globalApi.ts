@@ -23,7 +23,7 @@ export type DriverBuddyProfile = {
     can_upgrade?: boolean;
 } | null;
 
-const API_URL = 'https://apistg.ahamove.com/api/v3/private/driver-buddy';
+const API_URL = 'https://apiuat.ahamove.com/api/v3/private/driver-buddy';
 const TOKEN_KEY = 'auth_token';
 const DEBUG_KEY = 'debug_mode';
 const PROFILE_STORAGE_KEY = 'cached_profile';

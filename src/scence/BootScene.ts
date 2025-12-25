@@ -1,5 +1,7 @@
 import Phaser from "phaser";
-import { Scence } from "@/utils/Constants";
+import {Scence} from "@/utils/Constants";
+import {JSFunction} from "@/utils/js-function";
+import {fetchProfile, initFromUrlOrStorage} from "@/services/globalApi";
 
 export default class BootScene extends Phaser.Scene {
     constructor() {
@@ -7,20 +9,59 @@ export default class BootScene extends Phaser.Scene {
     }
 
     create() {
-        // Decide which scene to start based on localStorage flag set when user closes WelcomeScene
+        JSFunction.call({name: 'hide_toolbar'})
+            .then(r => {
+                console.log(r);
+            }).catch(e => {
+        });
+
+        // Initialize token and debug mode
+        initFromUrlOrStorage();
+
+        this.doInit()
+            .then(value => {
+
+            })
+            .catch((err) => {});
+    }
+
+    private async doInit() {
         let showWelcome = true;
         try {
-            const val = typeof window !== "undefined" ? window.localStorage.getItem("welcomeSeen") : null;
-            showWelcome = val !== "true"; // show welcome if not seen yet
+            // Always getProfile user when first visit web
+            const profile = await fetchProfile(true);
+
+            const level = profile?.buddy?.level ?? 1;
+            const balance = profile?.balance ?? 0;
+
+            // If user is not first visit, in level > 1 or have coin > 0 never show WelcomeScene, navigate to HomeScene.
+            if (level > 1 || balance > 0) {
+                showWelcome = false;
+            } else {
+                // Also check localStorage for manual skip
+                const val = typeof window !== "undefined" ? window.localStorage.getItem("welcomeSeen") : null;
+                if (val === "true") {
+                    showWelcome = false;
+                }
+            }
         } catch (e) {
-            // If localStorage unavailable, fall back to showing Welcome
-            showWelcome = true;
+            console.error("Failed to fetch profile in BootScene", e);
+            // Fallback to localStorage if API fails
+            try {
+                const val = typeof window !== "undefined" ? window.localStorage.getItem("welcomeSeen") : null;
+                showWelcome = val !== "true";
+            } catch (err) {
+                showWelcome = true;
+            }
         }
 
-        if (showWelcome) {
-            this.scene.start(Scence.Welcome);
-        } else {
-            this.scene.start(Scence.Home);
+        // Check if the scene is still active and valid before transitioning
+        if (this.scene && this.scene.key === Scence.Boot) {
+            if (showWelcome) {
+                this.scene.start(Scence.Welcome);
+            } else {
+                this.scene.start(Scence.Home);
+            }
         }
     }
 }

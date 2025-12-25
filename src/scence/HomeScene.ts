@@ -18,10 +18,10 @@ import {
     type DriverBuddyProfile, getToken
 } from "@/services/globalApi";
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
-import {is} from "@babel/types";
 import {ApiError} from "next/dist/server/api-utils";
 import {type LevelPreviewItem} from "@/scence/LevelPreviewScene";
 import LevelPreviewPopup from "@/ui/LevelPreviewPopup";
+import {JSFunction} from "@/utils/js-function";
 
 /**
  * Generate test coin history data for performance testing
@@ -65,6 +65,7 @@ export class HomeScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
     private coinBarUi!: CoinBar;
     private shareIcon!: Phaser.GameObjects.Image;
+    private closeIcon!: Phaser.GameObjects.Image;
     private titleImage?: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
 
@@ -128,6 +129,18 @@ export class HomeScene extends Phaser.Scene {
         this.shareIcon = this.add.image(w - 50, h * 0.078, "share").setOrigin(0.5);
         this.fitHeight(this.shareIcon, h * 0.055);
         this.shareIcon.setInteractive({useHandCursor: true});
+
+        this.closeIcon = this.add.image(50, h * 0.078, "back_arrow").setOrigin(0.5);
+        this.fitHeight(this.closeIcon, 40 * scaleUnit());
+        this.closeIcon.setInteractive({useHandCursor: true});
+        this.closeIcon.on("pointerdown", () => {
+            JSFunction.call({name: 'close'})
+                .then(r => {
+                    console.log(r);
+                }).catch(e => {
+                console.log(e);
+            });
+        });
 
         // Title (image or text fallback)
         if (this.textures.exists("main_header")) {
@@ -603,7 +616,7 @@ export class HomeScene extends Phaser.Scene {
     private showLoading() {
         if (!this.loadingContainer) return;
         this.loadingContainer.setVisible(true);
-        
+
         // Spin the arc continuously
         if (this.loadingSpinner) {
             this.tweens.add({

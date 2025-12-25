@@ -6,7 +6,7 @@ import {getAppFontFamily, loadAppFont} from "@/utils/fonts";
 import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
 import CoinBar from "@/ui/CoinBar";
-import {initFromUrlOrStorage, fetchProfile, getProfile, subscribe, type DriverBuddyProfile} from "@/services/globalApi";
+import {initFromUrlOrStorage, fetchProfile, getProfile, getCachedProfile, subscribe, type DriverBuddyProfile} from "@/services/globalApi";
 
 export class WelcomeScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
@@ -133,7 +133,8 @@ export class WelcomeScene extends Phaser.Scene {
         this.congratsText.setLineSpacing(8);
 
         // Level button using reusable UiButton component
-        this.levelButton = new UiButton(this, width / 3, height * 0.405, "CẤP ĐỘ 1", width * 0.5, true, true);
+        const initialLevel = getCachedProfile()?.buddy?.level ?? 1;
+        this.levelButton = new UiButton(this, width / 3, height * 0.405, `CẤP ĐỘ ${initialLevel}`, width * 0.5, true, true);
         this.add.existing(this.levelButton);
         this.levelButton.onClick(() => {
             // Placeholder click handler — keep or replace with your desired action
@@ -423,13 +424,15 @@ export class WelcomeScene extends Phaser.Scene {
         const applyProfile = (p: DriverBuddyProfile | null) => {
             const balance = Math.max(0, Math.floor(p?.balance ?? 0));
             this.coinBarUi?.setValue(`${balance} XU`);
+            const level = p?.buddy?.level ?? 1;
+            this.levelButton?.setText(`CẤP ĐỘ ${level}`);
         };
         // Subscribe to global profile changes
         this.unsubscribeProfile = subscribe((p) => {
             if (p) applyProfile(p);
         });
         // Apply cached profile immediately if available
-        const cached = getProfile();
+        const cached = getCachedProfile();
         if (cached) applyProfile(cached);
         // Cleanup subscription on scene end
         this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {

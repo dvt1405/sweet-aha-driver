@@ -322,7 +322,7 @@ export default class SharePopup {
             await JSFunction.call({
                 name: "share",
                 body: {
-                    image: [base64],
+                    image: [base64.replace(/^data:image\/(png|jpg);base64,/, "")],
                     title: "Xế cưng Aha",
                 }
             });

@@ -7,4 +7,5 @@ export enum Scence {
     Home = "HomeScene",
     Guide = "GuideScene",
     LEVEL_PREVIEW = "LevelPreviewScene",
+    Share = "ShareScene",
 }

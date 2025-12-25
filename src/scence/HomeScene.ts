@@ -15,6 +15,7 @@ import {
     claimDailyCheckin,
     fetchCoinHistoryItems,
     upgradeBuddyLevel,
+    fetchSupplierProfile,
     type DriverBuddyProfile, getToken
 } from "@/services/globalApi";
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
@@ -129,6 +130,9 @@ export class HomeScene extends Phaser.Scene {
         this.shareIcon = this.add.image(w - 50, h * 0.078, "share").setOrigin(0.5);
         this.fitHeight(this.shareIcon, h * 0.055);
         this.shareIcon.setInteractive({useHandCursor: true});
+        this.shareIcon.on("pointerdown", () => {
+            this.handleShare();
+        });
 
         this.closeIcon = this.add.image(50, h * 0.078, "back_arrow").setOrigin(0.5);
         this.fitHeight(this.closeIcon, 40 * scaleUnit());
@@ -488,6 +492,26 @@ export class HomeScene extends Phaser.Scene {
             this.updateCheckinButtonState();
         } finally {
             this.claiming = false;
+        }
+    }
+
+    private async handleShare() {
+        if (!getToken() || getToken()?.length == 0) {
+            this.showWarningPopup('Missing Auth Token!');
+            return;
+        }
+        try {
+            this.showLoading();
+            // Fetch supplier profile to get driver name and avatar
+            await fetchSupplierProfile();
+            this.hideLoading();
+            // Launch share scene
+            this.scene.start(Scence.Share);
+        } catch (e: any) {
+            this.hideLoading();
+            console.error('Error fetching supplier profile:', e);
+            // Still try to show share scene with default values
+            this.scene.start(Scence.Share);
         }
     }
 

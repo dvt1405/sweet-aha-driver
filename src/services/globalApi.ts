@@ -23,7 +23,11 @@ export type DriverBuddyProfile = {
     can_upgrade?: boolean;
 } | null;
 
-const API_URL = 'https://apiuat.ahamove.com/api/v3/private/driver-buddy';
+export const HOST = "https://apiuat.ahamove.com"
+const API_URL = `${HOST}/api/v3/private/driver-buddy`;
+// Supplier Profile API
+export const SUPPLIER_API_URL = `${HOST}/api/v3/private/supplier/profile`;
+
 const TOKEN_KEY = 'auth_token';
 const DEBUG_KEY = 'debug_mode';
 const PROFILE_STORAGE_KEY = 'cached_profile';
@@ -415,6 +419,58 @@ export async function upgradeBuddyLevel(): Promise<UpgradeBuddyResponse> {
     return data;
 }
 
+export type SupplierProfile = {
+    _id?: string;
+    name?: string;
+    mobile?: string;
+    avatar?: string;
+} | null;
+
+// Raw API response structure
+type SupplierProfileResponse = {
+    supplier?: {
+        _id?: string;
+        name?: string;
+        mobile?: string;
+        avatar?: string;
+    };
+};
+
+let _supplierProfile: SupplierProfile = null;
+
+/**
+ * Fetch supplier profile to get driver name and avatar.
+ * GET /api/v3/private/supplier/profile?token={token}
+ */
+export async function fetchSupplierProfile(force: boolean = false): Promise<SupplierProfile> {
+    if (!force && _supplierProfile) return _supplierProfile;
+    const token = getToken();
+    if (!token) throw new Error('No token');
+    const url = `${SUPPLIER_API_URL}?token=${token}`;
+    const reqInit: RequestInit = {
+        method: 'GET',
+    };
+    if (isDebug()) {
+        try {
+            console.log(buildCurl({ url }));
+        } catch {}
+    }
+    const res = await fetch(url, reqInit);
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new ApiError(res.status, `Supplier profile failed: HTTP ${res.status}${text ? ` - ${text}` : ''}`);
+    }
+    const data = await res.json() as SupplierProfileResponse;
+    // Extract the nested supplier object from the response
+    _supplierProfile = data?.supplier ?? null;
+    return _supplierProfile;
+}
+
+export function getSupplierProfile(): SupplierProfile {
+    return _supplierProfile;
+}
+
+// eslint-disable-next-line import/no-anonymous-default-export
 export default {
     initFromUrlOrStorage,
     getToken,
@@ -427,4 +483,6 @@ export default {
     fetchCoinTransactions,
     fetchCoinHistoryItems,
     upgradeBuddyLevel,
+    fetchSupplierProfile,
+    getSupplierProfile,
 };

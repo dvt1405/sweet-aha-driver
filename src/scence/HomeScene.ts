@@ -511,6 +511,11 @@ export class HomeScene extends Phaser.Scene {
                 console.error('Failed to fetch supplier profile:', e);
             }
         }
+        // If iOS, navigate to ShareScene with back button
+        if (JSFunction.isIOS()) {
+            this.scene.start(Scence.Share);
+            return;
+        }
         // Show share popup with ShareScene-style UI
         new SharePopup(this);
     }

@@ -44,7 +44,7 @@ export default class SharePopup {
         const supplierProfile = getSupplierProfile();
         const level = profile?.buddy?.level ?? 1;
         const driverName = supplierProfile?.name ?? "Tài Xế";
-        const avatarUrl = supplierProfile?.avatar;
+        const avatarUrl = supplierProfile?.files?.avatar?.size128 ?? supplierProfile?.files?.avatar?.origin;
 
         // Dim background
         this.dim = scene.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.85)
@@ -303,13 +303,23 @@ export default class SharePopup {
             this.closeBtn.setVisible(true);
             
             console.log("Sharing cropped image from popup");
-            await JSFunction.call({
-                name: "share",
-                body: {
-                    image: [base64.replace(/^data:image\/(png|jpg);base64,/, "")],
-                    title: "Xế cưng Aha",
-                }
-            });
+            if (JSFunction.isIOS()) {
+                await JSFunction.call({
+                    name: "screenshot_share",
+                    body: {
+                        image: [base64.replace(/^data:image\/(png|jpg);base64,/, "")],
+                        title: "Xế cưng Aha",
+                    }
+                });
+            } else {
+                await JSFunction.call({
+                    name: "share",
+                    body: {
+                        image: [base64.replace(/^data:image\/(png|jpg);base64,/, "")],
+                        title: "Xế cưng Aha",
+                    }
+                });
+            }
         } catch (error) {
             console.error("Error sharing:", error);
             // Restore UI elements in case of error

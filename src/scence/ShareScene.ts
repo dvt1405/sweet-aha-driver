@@ -8,6 +8,8 @@ import {
     getSupplierProfile,
 } from "@/services/globalApi";
 import {JSFunction, WebInAppEvent} from "@/utils/js-function";
+import UiButton from "@/ui/UiButton";
+import {scaleUnit} from "@/utils/CanvasSize";
 
 export class ShareScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
@@ -16,11 +18,11 @@ export class ShareScene extends Phaser.Scene {
     private avatarMask!: Phaser.GameObjects.Graphics;
     private congratsText!: Phaser.GameObjects.Text;
     private driverNameText!: Phaser.GameObjects.Text;
-    private levelBadge!: Phaser.GameObjects.Image;
-    private levelText!: Phaser.GameObjects.Text;
+    private levelButton!: UiButton;
     private bikeImage!: Phaser.GameObjects.Image;
     private avatarLoadingComplete: boolean = false;
     private avatarLoadingPromise: Promise<void> | null = null;
+    private backButton!: Phaser.GameObjects.Image;
 
     constructor() {
         super(Scence.Share);
@@ -30,6 +32,8 @@ export class ShareScene extends Phaser.Scene {
         this.load.image("bg_garage", "/main_background.png");
         this.load.image("main_header", "/main_header.png");
         this.load.image("bg_button_active", "/bg_button_active.png");
+        this.load.image("bg_progress_active", "/bg_progress_active.png");
+        this.load.image("back_arrow", "/ic_arrow_left.png");
         // Load level bike images
         for (let i = 1; i <= 10; i++) {
             this.load.image(`lv${i}`, `/lv${i}.png`);
@@ -45,7 +49,7 @@ export class ShareScene extends Phaser.Scene {
         const supplierProfile = getSupplierProfile();
         const level = profile?.buddy?.level ?? 1;
         const driverName = supplierProfile?.name ?? "Tài Xế";
-        const avatarUrl = supplierProfile?.avatar;
+        const avatarUrl = supplierProfile?.files?.avatar?.size128 ?? supplierProfile?.files?.avatar?.origin;
 
         // Background - garage scene
         this.bg = this.add.image(width / 2, height / 2, "bg_garage").setOrigin(0.5);
@@ -87,6 +91,14 @@ export class ShareScene extends Phaser.Scene {
 
         // Bike image at bottom
         this.createBikeImage(width / 2, height * 0.82, level, width * 0.75);
+
+        // Back button at top-left corner (same style as HomeScene)
+        this.backButton = this.add.image(50, height * 0.078, "back_arrow").setOrigin(0.5);
+        this.fitHeight(this.backButton, 40 * scaleUnit());
+        this.backButton.setInteractive({ useHandCursor: true });
+        this.backButton.on("pointerdown", () => {
+            this.scene.start(Scence.Home);
+        });
 
         // Wait for avatar to load, then capture and share
         this.waitForRenderAndCapture().then(r => {
@@ -170,27 +182,12 @@ export class ShareScene extends Phaser.Scene {
     }
 
     private createLevelBadge(x: number, y: number, level: number, badgeWidth: number) {
-        const badgeHeight = badgeWidth * 0.32;
-
-        // Create badge background
-        if (this.textures.exists("bg_button_active")) {
-            this.levelBadge = this.add.image(x, y, "bg_button_active").setOrigin(0.5);
-            this.levelBadge.setDisplaySize(badgeWidth, badgeHeight);
-        } else {
-            // Fallback: draw rounded rectangle
-            const graphics = this.add.graphics();
-            graphics.fillStyle(0x7cb342);
-            graphics.fillRoundedRect(x - badgeWidth / 2, y - badgeHeight / 2, badgeWidth, badgeHeight, badgeHeight / 2);
-        }
-
-        // Level text
-        this.levelText = this.add.text(x, y, `CẤP ĐỘ ${level}`, {
-            fontFamily: getAppFontFamily(),
-            fontSize: `${Math.floor(badgeWidth * 0.18)}px`,
-            fontStyle: "bold",
-            color: "#ffffff",
-            align: "center",
-        }).setOrigin(0.5);
+        // Use UiButton with isProgress=true to match SharePopup's level button style
+        this.levelButton = new UiButton(this, x, y, `CẤP ĐỘ ${level}`, badgeWidth, true, true);
+        this.add.existing(this.levelButton);
+        
+        // Scale font size proportionally to badge width
+        this.levelButton.setFontSize(Math.floor(badgeWidth * 0.12));
     }
 
     private createBikeImage(x: number, y: number, level: number, targetWidth: number) {
@@ -219,17 +216,21 @@ export class ShareScene extends Phaser.Scene {
         try {
             console.log("Sharing image:", base64Image);
             await JSFunction.call({
-                name: "share",
+                name: "screenshot_share",
                 body: {
-                    image: [base64Image],
+                    image: [base64Image.replace(/^data:image\/(png|jpg);base64,/, "")],
                     title: "Xế cưng Aha",
                 }
             });
+            // Delay 500ms before returning to home scene after successful sharing
+            await new Promise<void>((resolve) => {
+                this.time.delayedCall(500, () => {
+                    resolve();
+                });
+            });
+            this.scene.start(Scence.Home);
         } catch (error) {
             console.error("Error sharing:", error);
-        } finally {
-            // Return to home scene after sharing
-            // this.scene.start(Scence.Home);
         }
     }
 
@@ -243,6 +244,12 @@ export class ShareScene extends Phaser.Scene {
     private fitWidth(img: Phaser.GameObjects.Image, targetWidth: number) {
         const scale = targetWidth / img.width;
         img.setScale(scale);
+    }
+
+    private fitHeight(img: Phaser.GameObjects.Image, targetHeight: number) {
+        const tex = img.texture.getSourceImage() as HTMLImageElement;
+        const s = targetHeight / tex.height;
+        img.setDisplaySize(tex.width * s, targetHeight);
     }
 }
 

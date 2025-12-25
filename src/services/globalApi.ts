@@ -329,12 +329,13 @@ export async function fetchCoinTransactions(): Promise<CoinTransaction[]> {
     if (!token) throw new Error('No token');
     const url = `${API_URL}/transactions`;
     const reqInit: RequestInit = {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {Authorization: `Bearer ${token}`},
     };
     if (isDebug()) {
         try {
-            console.log(buildCurl({ url, headers: reqInit.headers as Record<string, string> }));
-        } catch {}
+            console.log(buildCurl({url, headers: reqInit.headers as Record<string, string>}));
+        } catch {
+        }
     }
     const res = await fetch(url, reqInit);
     if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
@@ -351,7 +352,9 @@ export async function fetchCoinHistoryItems(): Promise<CoinHistoryListItem[]> {
             const d = new Date((ts || 0) * 1000);
             const dd = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
             return dd;
-        } catch { return ''; }
+        } catch {
+            return '';
+        }
     };
     const mapTitle = (t?: string, bonus?: string, desc?: string) => {
         if (desc && desc.trim().length) return desc;
@@ -400,8 +403,9 @@ export async function upgradeBuddyLevel(): Promise<UpgradeBuddyResponse> {
     };
     if (isDebug()) {
         try {
-            console.log(buildCurl({ method: 'PATCH', url, headers: reqInit.headers as Record<string, string> }));
-        } catch {}
+            console.log(buildCurl({method: 'PATCH', url, headers: reqInit.headers as Record<string, string>}));
+        } catch {
+        }
     }
     const res = await fetch(url, reqInit);
     if (!res.ok) {
@@ -412,10 +416,11 @@ export async function upgradeBuddyLevel(): Promise<UpgradeBuddyResponse> {
     // Update cached profile balance optimistically if returned
     try {
         if (_profile && typeof data?.new_balance === 'number') {
-            _profile = { ..._profile, balance: data.new_balance } as DriverBuddyProfile;
+            _profile = {..._profile, balance: data.new_balance} as DriverBuddyProfile;
             notify();
         }
-    } catch {}
+    } catch {
+    }
     return data;
 }
 
@@ -424,6 +429,12 @@ export type SupplierProfile = {
     name?: string;
     mobile?: string;
     avatar?: string;
+    files: {
+        avatar?: {
+            size128?: string;
+            origin?: string;
+        };
+    };
 } | null;
 
 // Raw API response structure
@@ -452,8 +463,9 @@ export async function fetchSupplierProfile(force: boolean = false): Promise<Supp
     };
     if (isDebug()) {
         try {
-            console.log(buildCurl({ url }));
-        } catch {}
+            console.log(buildCurl({url}));
+        } catch {
+        }
     }
     const res = await fetch(url, reqInit);
     if (!res.ok) {

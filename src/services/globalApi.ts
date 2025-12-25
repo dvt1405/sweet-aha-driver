@@ -428,7 +428,6 @@ export type SupplierProfile = {
     _id?: string;
     name?: string;
     mobile?: string;
-    avatar?: string;
     files: {
         avatar?: {
             size128?: string;
@@ -443,7 +442,12 @@ type SupplierProfileResponse = {
         _id?: string;
         name?: string;
         mobile?: string;
-        avatar?: string;
+        files: {
+            avatar?: {
+                size128?: string;
+                origin?: string;
+            };
+        };
     };
 };
 

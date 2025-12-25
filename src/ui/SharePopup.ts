@@ -190,14 +190,28 @@ export default class SharePopup {
     }
 
     private createDefaultAvatar(x: number, y: number, radius: number) {
-        // Create a gray circle as default avatar
-        const graphics = this.scene.add.graphics();
-        graphics.fillStyle(0xcccccc);
-        graphics.fillCircle(x, y, radius);
-        this.previewContainer.add(graphics);
-        // Move behind text elements
-        this.previewContainer.sendToBack(graphics);
-        this.previewContainer.sendToBack(this.previewBg);
+        // Use default person icon as avatar
+        if (this.scene.textures.exists("ic_default_person")) {
+            this.avatarImage = this.scene.add.image(x, y, "ic_default_person").setOrigin(0.5);
+            const texture = this.scene.textures.get("ic_default_person");
+            const frame = texture.getSourceImage();
+            const scale = (radius * 2) / Math.min(frame.width, frame.height);
+            this.avatarImage.setScale(scale);
+            this.avatarImage.setMask(this.avatarMask!.createGeometryMask());
+            this.previewContainer.add(this.avatarImage);
+            // Move behind text elements
+            this.previewContainer.sendToBack(this.avatarImage);
+            this.previewContainer.sendToBack(this.previewBg);
+        } else {
+            // Fallback to gray circle if icon not loaded
+            const graphics = this.scene.add.graphics();
+            graphics.fillStyle(0xcccccc);
+            graphics.fillCircle(x, y, radius);
+            this.previewContainer.add(graphics);
+            // Move behind text elements
+            this.previewContainer.sendToBack(graphics);
+            this.previewContainer.sendToBack(this.previewBg);
+        }
     }
 
     private createLevelBadge(x: number, y: number, level: number, badgeWidth: number) {

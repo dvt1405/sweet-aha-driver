@@ -109,6 +109,8 @@ export class HomeScene extends Phaser.Scene {
         // Popup warning background for already-claimed case (HTTP 404)
         this.load.image("bg_popup_warning", "/bg_popup_warning.png");
         this.load.image("popup_header", "/bg_btn_header_popup.png")
+        // Default person icon for avatar fallback
+        this.load.image("ic_default_person", "/ic_default_person.svg");
         // Default level images for fallback when external image fails to load
         for (let i = 1; i <= 10; i++) {
             this.load.image(`lv${i}`, `/lv${i}.png`);

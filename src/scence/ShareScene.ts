@@ -34,6 +34,7 @@ export class ShareScene extends Phaser.Scene {
         this.load.image("bg_button_active", "/bg_button_active.png");
         this.load.image("bg_progress_active", "/bg_progress_active.png");
         this.load.image("back_arrow", "/ic_arrow_left.png");
+        this.load.image("ic_default_person", "/ic_default_person.svg");
         // Load level bike images
         for (let i = 1; i <= 10; i++) {
             this.load.image(`lv${i}`, `/lv${i}.png`);
@@ -175,10 +176,20 @@ export class ShareScene extends Phaser.Scene {
     }
 
     private createDefaultAvatar(x: number, y: number, radius: number) {
-        // Create a gray circle as default avatar
-        const graphics = this.add.graphics();
-        graphics.fillStyle(0xcccccc);
-        graphics.fillCircle(x, y, radius);
+        // Use default person icon as avatar
+        if (this.textures.exists("ic_default_person")) {
+            this.avatarImage = this.add.image(x, y, "ic_default_person").setOrigin(0.5);
+            const texture = this.textures.get("ic_default_person");
+            const frame = texture.getSourceImage();
+            const scale = (radius * 2) / Math.min(frame.width, frame.height);
+            this.avatarImage.setScale(scale);
+            this.avatarImage.setMask(this.avatarMask.createGeometryMask());
+        } else {
+            // Fallback to gray circle if icon not loaded
+            const graphics = this.add.graphics();
+            graphics.fillStyle(0xcccccc);
+            graphics.fillCircle(x, y, radius);
+        }
     }
 
     private createLevelBadge(x: number, y: number, level: number, badgeWidth: number) {

@@ -31,8 +31,7 @@ export default class SharePopup {
     private previewMask?: Phaser.GameObjects.Graphics;
     private congratsText!: Phaser.GameObjects.Text;
     private driverNameText!: Phaser.GameObjects.Text;
-    private levelBadge?: Phaser.GameObjects.Image;
-    private levelText!: Phaser.GameObjects.Text;
+    private levelButton?: UiButton;
     private bikeImage?: Phaser.GameObjects.Image;
     private avatarLoadingPromise: Promise<void> | null = null;
 
@@ -202,30 +201,15 @@ export default class SharePopup {
     }
 
     private createLevelBadge(x: number, y: number, level: number, badgeWidth: number) {
-        const badgeHeight = badgeWidth * 0.32;
-
-        // Create badge background
-        if (this.scene.textures.exists("bg_button_active")) {
-            this.levelBadge = this.scene.add.image(x, y, "bg_button_active").setOrigin(0.5);
-            this.levelBadge.setDisplaySize(badgeWidth, badgeHeight);
-            this.previewContainer.add(this.levelBadge);
-        } else {
-            // Fallback: draw rounded rectangle
-            const graphics = this.scene.add.graphics();
-            graphics.fillStyle(0x7cb342);
-            graphics.fillRoundedRect(x - badgeWidth / 2, y - badgeHeight / 2, badgeWidth, badgeHeight, badgeHeight / 2);
-            this.previewContainer.add(graphics);
-        }
-
-        // Level text
-        this.levelText = this.scene.add.text(x, y, `CẤP ĐỘ ${level}`, {
-            fontFamily: getAppFontFamily(),
-            fontSize: `${Math.floor(badgeWidth * 0.18)}px`,
-            fontStyle: "bold",
-            color: "#ffffff",
-            align: "center",
-        }).setOrigin(0.5);
-        this.previewContainer.add(this.levelText);
+        // Use UiButton with isProgress=true to match HomeScene's level button style
+        this.levelButton = new UiButton(this.scene, x, y, `CẤP ĐỘ ${level}`, badgeWidth, true, true);
+        this.scene.add.existing(this.levelButton);
+        
+        // Scale font size proportionally to badge width
+        this.levelButton.setFontSize(Math.floor(badgeWidth * 0.12));
+        
+        // Add to preview container
+        this.previewContainer.add(this.levelButton);
     }
 
     private createBikeImage(x: number, y: number, level: number, targetWidth: number) {
@@ -362,6 +346,10 @@ export default class SharePopup {
         }
         try {
             this.closeBtn?.destroy();
+        } catch {
+        }
+        try {
+            this.levelButton?.destroy();
         } catch {
         }
         try {

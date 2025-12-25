@@ -40,6 +40,9 @@ export default function BikeGame() {
                 mode: Phaser.Scale.FIT,
                 autoCenter: Phaser.Scale.CENTER_BOTH,
             },
+            render: {
+                preserveDrawingBuffer: true,
+            },
         };
 
         const game = new Phaser.Game(config);
@@ -54,7 +57,7 @@ export default function BikeGame() {
     return (
         <div
             ref={outerContainerRef}
-            className="w-full sm:max-w-3xl aspect-[9/16] sm:aspect-[16/9]"
+            className="w-full sm:max-w-3xl sm:h-full aspect-9/16 sm:aspect-video"
         >
             <div
                 ref={containerRef}

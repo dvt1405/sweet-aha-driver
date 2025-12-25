@@ -7,7 +7,7 @@ import {
     getProfile,
     getSupplierProfile,
 } from "@/services/globalApi";
-import {JSFunction} from "@/utils/js-function";
+import {JSFunction, WebInAppEvent} from "@/utils/js-function";
 
 export class ShareScene extends Phaser.Scene {
     private bg!: Phaser.GameObjects.Image;
@@ -19,6 +19,8 @@ export class ShareScene extends Phaser.Scene {
     private levelBadge!: Phaser.GameObjects.Image;
     private levelText!: Phaser.GameObjects.Text;
     private bikeImage!: Phaser.GameObjects.Image;
+    private avatarLoadingComplete: boolean = false;
+    private avatarLoadingPromise: Promise<void> | null = null;
 
     constructor() {
         super(Scence.Share);
@@ -86,10 +88,32 @@ export class ShareScene extends Phaser.Scene {
         // Bike image at bottom
         this.createBikeImage(width / 2, height * 0.82, level, width * 0.75);
 
-        // After rendering, capture and share
-        this.time.delayedCall(500, () => {
-            this.captureAndShare();
+        // Wait for avatar to load, then capture and share
+        this.waitForRenderAndCapture().then(r => {
+            console.log("Capture and share complete:", r);
         });
+    }
+
+    private async waitForRenderAndCapture() {
+        try {
+            // Wait for avatar loading to complete
+            if (this.avatarLoadingPromise) {
+                await this.avatarLoadingPromise;
+            }
+
+            // Wait for next frame to ensure everything is rendered
+            await new Promise<void>((resolve) => {
+                this.time.delayedCall(100, () => {
+                    resolve();
+                });
+            });
+
+            // Capture and share
+            this.captureAndShare();
+        } catch (error) {
+            console.error("Error waiting for render:", error);
+            this.captureAndShare();
+        }
     }
 
     private createCircularAvatar(x: number, y: number, radius: number, avatarUrl?: string) {
@@ -100,14 +124,18 @@ export class ShareScene extends Phaser.Scene {
 
         // Load avatar image
         if (avatarUrl && avatarUrl.length > 0) {
-            this.loadExternalAvatar(avatarUrl, x, y, radius);
+            this.avatarLoadingPromise = new Promise<void>((resolve) => {
+                this.loadExternalAvatar(avatarUrl, x, y, radius, resolve);
+            });
         } else {
             // Create default gray circle avatar
             this.createDefaultAvatar(x, y, radius);
+            this.avatarLoadingComplete = true;
+            this.avatarLoadingPromise = Promise.resolve();
         }
     }
 
-    private loadExternalAvatar(url: string, x: number, y: number, radius: number) {
+    private loadExternalAvatar(url: string, x: number, y: number, radius: number, onComplete?: () => void) {
         const key = `avatar_${Date.now()}`;
 
         this.load.image(key, url);
@@ -123,9 +151,13 @@ export class ShareScene extends Phaser.Scene {
             } else {
                 this.createDefaultAvatar(x, y, radius);
             }
+            this.avatarLoadingComplete = true;
+            onComplete?.();
         });
         this.load.once('loaderror', () => {
             this.createDefaultAvatar(x, y, radius);
+            this.avatarLoadingComplete = true;
+            onComplete?.();
         });
         this.load.start();
     }
@@ -171,34 +203,33 @@ export class ShareScene extends Phaser.Scene {
 
     private async captureAndShare() {
         try {
-            // Use Phaser's snapshot to capture the canvas
-            this.game.renderer.snapshot((image: HTMLImageElement | Phaser.Display.Color) => {
-                if (image instanceof HTMLImageElement) {
-                    const base64 = image.src;
-                    // Call JS share function with the captured image
-                    this.shareImage(base64);
-                }
-            });
+            // Capture the Phaser canvas directly
+            // (requires preserveDrawingBuffer: true in Phaser config)
+            const canvas = this.game.canvas;
+            const base64 = canvas.toDataURL("image/png");
+            // Call JS share function with the captured image
+            await this.shareImage(base64);
         } catch (error) {
-            console.error("Error capturing screenshot:", error);
-            // Go back to home on error
+            console.log("Error capturing screenshot:", error);
             this.scene.start(Scence.Home);
         }
     }
 
     private async shareImage(base64Image: string) {
         try {
+            console.log("Sharing image:", base64Image);
             await JSFunction.call({
-                name: 'share',
+                name: "share",
                 body: {
-                    image: base64Image,
+                    image: [base64Image],
+                    title: "Xế cưng Aha",
                 }
             });
         } catch (error) {
             console.error("Error sharing:", error);
         } finally {
             // Return to home scene after sharing
-            this.scene.start(Scence.Home);
+            // this.scene.start(Scence.Home);
         }
     }
 

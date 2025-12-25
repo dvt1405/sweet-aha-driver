@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import {Scence} from "@/utils/Constants";
 import UiButton from "@/ui/UiButton";
 import ClaimPopup from "@/ui/ClaimPopup";
+import SharePopup from "@/ui/SharePopup";
 import {getAppFontFamily} from "@/utils/fonts";
 import {registerFontAutoRefresh} from "@/utils/fontSync";
 import {scaleUnit} from "@/utils/CanvasSize";
@@ -16,6 +17,7 @@ import {
     fetchCoinHistoryItems,
     upgradeBuddyLevel,
     fetchSupplierProfile,
+    getSupplierProfile,
     type DriverBuddyProfile, getToken
 } from "@/services/globalApi";
 import {showCoinHistoryPopup, type CoinHistoryItem} from "@/scence/CoinHistoryScene";
@@ -361,7 +363,7 @@ export class HomeScene extends Phaser.Scene {
             const levelBtnHeight = 156.0 / 32 * su;
             const bottomY = h2 - 56 * su;
             this.levelButton.setPosition(w2 / 2, bottomY);
-            this.levelButton.setTargetWidth(w2 * 0.3);
+            this.levelButton.setTargetWidth(w2 * 0.4);
             this.levelButton.height = levelBtnHeight;
             this.levelButton.setFontSize(16 * su);
 
@@ -500,19 +502,17 @@ export class HomeScene extends Phaser.Scene {
             this.showWarningPopup('Missing Auth Token!');
             return;
         }
-        try {
-            this.showLoading();
-            // Fetch supplier profile to get driver name and avatar
-            await fetchSupplierProfile();
-            this.hideLoading();
-            // Launch share scene
-            this.scene.start(Scence.Share);
-        } catch (e: any) {
-            this.hideLoading();
-            console.error('Error fetching supplier profile:', e);
-            // Still try to show share scene with default values
-            this.scene.start(Scence.Share);
+        // Ensure supplier profile is loaded before showing share popup
+        const supplierProfile = getSupplierProfile();
+        if (!supplierProfile) {
+            try {
+                await fetchSupplierProfile();
+            } catch (e) {
+                console.error('Failed to fetch supplier profile:', e);
+            }
         }
+        // Show share popup with ShareScene-style UI
+        new SharePopup(this);
     }
 
     private markCheckedInToday() {

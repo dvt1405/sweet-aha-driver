@@ -5,6 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:staging": "cp .env.staging .env.local && next build",
+    "build:uat": "cp .env.uat .env.local && next build",
+    "build:production": "cp .env.production .env.local && next build",
+    "deploy:staging": "npm run build:staging && firebase deploy --only hosting:staging",
+    "deploy:uat": "npm run build:uat && firebase deploy --only hosting:uat",
+    "deploy:production": "npm run build:production && firebase deploy --only hosting:production",
     "start": "next start",
     "lint": "eslint"
   },

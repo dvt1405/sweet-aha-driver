@@ -1,0 +1,20 @@
+{
+  "projects": {
+    "default": "aha-chat-292008"
+  },
+  "targets": {
+    "aha-chat-292008": {
+      "hosting": {
+        "staging": [
+          "stg-sweet-driver"
+        ],
+        "uat": [
+          "sweet-driver"
+        ],
+        "production": [
+          "sweet-driver-pd"
+        ]
+      }
+    }
+  }
+}

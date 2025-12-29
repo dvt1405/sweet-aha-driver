@@ -23,7 +23,7 @@ export type DriverBuddyProfile = {
     can_upgrade?: boolean;
 } | null;
 
-export const HOST = "https://apiuat.ahamove.com"
+export const HOST = process.env.NEXT_PUBLIC_HOST || "https://apiuat.ahamove.com"
 const API_URL = `${HOST}/api/v3/private/driver-buddy`;
 // Supplier Profile API
 export const SUPPLIER_API_URL = `${HOST}/api/v3/private/supplier/profile`;

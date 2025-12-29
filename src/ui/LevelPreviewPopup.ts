@@ -26,7 +26,6 @@ export default class LevelPreviewPopup {
     private bg!: Phaser.GameObjects.Image;
     private coinBarUi!: CoinBar;
     private backBtn!: Phaser.GameObjects.Image;
-    private shareIcon!: Phaser.GameObjects.Image;
     private titleImage?: Phaser.GameObjects.Image;
     private titleText?: Phaser.GameObjects.Text;
     private requirementText!: Phaser.GameObjects.Text;
@@ -100,13 +99,6 @@ export default class LevelPreviewPopup {
         this.coinBarUi.setDepth(this.depthBase + 2);
         this.scene.add.existing(this.coinBarUi);
         this.coinBarUi.setBarHeight(height * 0.055);
-
-        // Share icon
-        this.shareIcon = this.scene.add.image(width - 50 * su, height * 0.078, "share")
-            .setOrigin(0.5)
-            .setDepth(this.depthBase + 2);
-        this.fitHeight(this.shareIcon, height * 0.055);
-        this.shareIcon.setInteractive({useHandCursor: true});
 
         // Title image or text
         const coinBarBottom = this.coinBarUi.getBottomCenter().y;
@@ -402,7 +394,6 @@ export default class LevelPreviewPopup {
         this.overlay?.destroy();
         this.bg?.destroy();
         this.backBtn?.destroy();
-        this.shareIcon?.destroy();
         this.titleImage?.destroy();
         this.titleText?.destroy();
         this.requirementText?.destroy();

@@ -5,7 +5,7 @@ import CoinBar from "@/ui/CoinBar";
 import UiButton from "@/ui/UiButton";
 import ViewPager, {type ViewPagerPage} from "@/ui/ViewPager";
 import {getAppFontFamily} from "@/utils/fonts";
-import {fetchProfileIfStale, getProfile} from "@/services/globalApi";
+import {fetchProfileIfStale, getProfile, upgradeBuddyLevel, fetchProfile} from "@/services/globalApi";
 import {type LevelPreviewItem} from "@/scence/LevelPreviewScene";
 
 type PopupOptions = {
@@ -156,9 +156,53 @@ export default class LevelPreviewPopup {
         this.upgradeBtn.setDepth(this.depthBase + 2);
         this.scene.add.existing(this.upgradeBtn);
         this.upgradeBtn.setFontSize(Math.round(20 * su));
-        this.upgradeBtn.onClick(() => {
-            // Hook for future upgrade integration; currently mirrors LevelPreviewScene behavior
-            console.log("Upgrade clicked");
+        this.upgradeBtn.onClick(async () => {
+            try {
+                // Prevent double click
+                this.upgradeBtn.setEnabled(false);
+                // Call upgrade API
+                await upgradeBuddyLevel();
+                // Refresh profile to pick up new level, balance, and buddy image
+                await fetchProfile(true).catch(() => {});
+                // Get updated profile and refresh the popup view to show preview buddy
+                const updatedProfile = getProfile();
+                if (updatedProfile) {
+                    // Update items with new buddy data
+                    this.items.length = 0;
+                    const cur = updatedProfile.buddy ?? {};
+                    this.items.push({
+                        level: cur.level ?? 1,
+                        model_name: cur.model_name,
+                        img_url: cur.img_url,
+                    });
+                    const next = updatedProfile.next_level_buddy ?? undefined;
+                    if (next) {
+                        this.items.push({
+                            level: next.level,
+                            model_name: next.model_name,
+                            upgrade_cost: next.upgrade_cost,
+                            img_url: next.img_url,
+                        });
+                    }
+                    // Rebuild view pager pages
+                    this.viewPager.setPages(this.items.map((item, index) => ({
+                        key: `level_preview_bike_${index}`,
+                        data: item,
+                    })), 0);
+                    // Reload bike images and update page info
+                    this.updateCoinBar();
+                    this.updatePageInfo();
+                    this.loadAllBikeImages().then(() => this.updatePageInfo());
+                }
+            } catch (e: any) {
+                // Re-enable based on latest profile permission
+                try {
+                    const p = getProfile();
+                    this.upgradeBtn.setEnabled(!!p?.can_upgrade);
+                } catch {
+                    this.upgradeBtn.setEnabled(false);
+                }
+            }
         });
 
         this.closeBtn = new UiButton(this.scene, rightX, btnY, "ĐÓNG", btnWidth, true, false);

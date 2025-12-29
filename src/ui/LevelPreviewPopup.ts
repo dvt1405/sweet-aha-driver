@@ -7,6 +7,7 @@ import ViewPager, {type ViewPagerPage} from "@/ui/ViewPager";
 import {getAppFontFamily} from "@/utils/fonts";
 import {fetchProfileIfStale, getProfile, upgradeBuddyLevel, fetchProfile} from "@/services/globalApi";
 import {type LevelPreviewItem} from "@/scence/LevelPreviewScene";
+import {Scence} from "@/utils/Constants";
 
 type PopupOptions = {
     items?: LevelPreviewItem[];
@@ -35,7 +36,6 @@ export default class LevelPreviewPopup {
     private closeBtn!: UiButton;
     private loadingSpinner?: Phaser.GameObjects.Arc | Phaser.GameObjects.Graphics;
     private loadingText?: Phaser.GameObjects.Text;
-    private congratsText?: Phaser.GameObjects.Text;
 
     private readonly items: LevelPreviewItem[] = [];
     private currentIndex = 0;
@@ -145,16 +145,6 @@ export default class LevelPreviewPopup {
             wordWrap: {width: width - 32 * su},
         }).setOrigin(0.5, 1).setDepth(this.depthBase + 2);
 
-        // Congrats text (initially hidden, shown after successful upgrade)
-        this.congratsText = this.scene.add.text(width / 2, requirementTextY, "CHÚC MỪNG TÀI XẾ\nĐÃ ĐẠT ĐƯỢC", {
-            fontFamily: getAppFontFamily(),
-            fontStyle: '600',
-            fontSize: Math.round(24 * su) + 'px',
-            color: "#ffffff",
-            align: "center",
-            wordWrap: {width: width * 0.8},
-        }).setOrigin(0.5, 1).setDepth(this.depthBase + 2).setLineSpacing(8).setVisible(false);
-
         // Bottom buttons
         const btnY = height - 80 * su;
         const btnWidth = width * 0.42;
@@ -175,42 +165,11 @@ export default class LevelPreviewPopup {
                 await upgradeBuddyLevel();
                 // Refresh profile to pick up new level, balance, and buddy image
                 await fetchProfile(true).catch(() => {});
-                // Get updated profile and refresh the popup view to show preview buddy
-                const updatedProfile = getProfile();
-                if (updatedProfile) {
-                    // Update items with new buddy data
-                    this.items.length = 0;
-                    const cur = updatedProfile.buddy ?? {};
-                    this.items.push({
-                        level: cur.level ?? 1,
-                        model_name: cur.model_name,
-                        img_url: cur.img_url,
-                    });
-                    const next = updatedProfile.next_level_buddy ?? undefined;
-                    if (next) {
-                        this.items.push({
-                            level: next.level,
-                            model_name: next.model_name,
-                            upgrade_cost: next.upgrade_cost,
-                            img_url: next.img_url,
-                        });
-                    }
-                    // Rebuild view pager pages
-                    this.viewPager.setPages(this.items.map((item, index) => ({
-                        key: `level_preview_bike_${index}`,
-                        data: item,
-                    })), 0);
-                    // Reload bike images and update page info
-                    this.updateCoinBar();
-                    this.updatePageInfo();
-                    this.loadAllBikeImages().then(() => this.updatePageInfo());
-
-                    // Show upgrade success message (same as WelcomeScene)
-                    this.requirementText.setVisible(false);
-                    this.congratsText?.setVisible(true);
-                    // Update level button to show new level
-                    const newLevel = cur.level ?? 1;
-                    this.levelButton.setText(`CẤP ĐỘ ${newLevel}`);
+                // Close popup and show WelcomeScene (same as HomeScene)
+                this.close();
+                try {
+                    this.scene.scene.start(Scence.Welcome);
+                } catch {
                 }
             } catch (e: any) {
                 // Re-enable based on latest profile permission

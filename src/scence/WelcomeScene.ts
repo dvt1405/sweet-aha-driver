@@ -426,6 +426,8 @@ export class WelcomeScene extends Phaser.Scene {
             this.coinBarUi?.setValue(`${balance} XU`);
             const level = p?.buddy?.level ?? 1;
             this.levelButton?.setText(`CẤP ĐỘ ${level}`);
+            // Load correct bike image based on profile
+            this.loadBikeImage(p);
         };
         // Subscribe to global profile changes
         this.unsubscribeProfile = subscribe((p) => {
@@ -565,5 +567,90 @@ export class WelcomeScene extends Phaser.Scene {
         const {width} = this.scale;
         const baseWidth = width * 0.85;
         this.bike.setDisplaySize(baseWidth * this.bikeZoom, this.bike.height * this.bikeZoom);
+    }
+
+    // Load bike image based on profile: try URL first, fallback to local level-based image
+    private async loadBikeImage(profile: DriverBuddyProfile) {
+        const imgUrl = profile?.buddy?.img_url;
+        const level = profile?.buddy?.level ?? 1;
+        const key = `welcome_bike_${level}`;
+
+        // Try to load from URL first
+        if (imgUrl && typeof imgUrl === 'string') {
+            try {
+                await this.loadExternalImage(key, imgUrl);
+                this.updateBikeTexture(key);
+                return;
+            } catch {
+                // Continue to fallback
+            }
+        }
+
+        // Fallback to local level-based image
+        const fallbackKey = `lv${level}`;
+        const fallbackPath = `/lv${level}.png`;
+
+        if (this.textures.exists(fallbackKey)) {
+            this.updateBikeTexture(fallbackKey);
+            return;
+        }
+
+        try {
+            this.load.image(fallbackKey, fallbackPath);
+            await new Promise<void>((resolve, reject) => {
+                this.load.once('complete', () => resolve());
+                this.load.once('loaderror', () => reject(new Error('loaderror')));
+                this.load.start();
+            });
+            if (this.textures.exists(fallbackKey)) {
+                this.updateBikeTexture(fallbackKey);
+                return;
+            }
+        } catch {
+            // Keep using default bike texture
+        }
+    }
+
+    // Load external image from URL
+    private loadExternalImage(key: string, url: string): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            try {
+                if (this.textures.exists(key)) {
+                    resolve();
+                    return;
+                }
+
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+
+                img.onload = () => {
+                    try {
+                        if (!this.textures.exists(key)) {
+                            this.textures.addImage(key, img);
+                        }
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+
+                img.onerror = () => {
+                    reject(new Error(`Failed to load image: ${url}`));
+                };
+
+                img.src = url;
+            } catch (e) {
+                reject(e);
+            }
+        });
+    }
+
+    // Update bike texture and maintain proper sizing
+    private updateBikeTexture(textureKey: string) {
+        if (this.textures.exists(textureKey)) {
+            this.bike.setTexture(textureKey);
+            const {width} = this.scale;
+            this.fitWidth(this.bike, width * 0.85);
+        }
     }
 }
